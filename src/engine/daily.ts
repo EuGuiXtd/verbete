@@ -16,16 +16,24 @@ const SLOTS_PER_DAY = 7;
  */
 const SLOT_OFFSET: Record<Variant, number> = { solo: 0, dueto: 1, quarteto: 3 };
 
-const permutations = new Map<number, readonly number[]>();
+const permutations = new Map<string, readonly number[]>();
 
 function permutationFor(cycle: number, poolSize: number): readonly number[] {
   // Memoized: without this, each of the seven daily lookups reshuffles 1500
   // elements from scratch.
-  let cached = permutations.get(cycle);
+  //
+  // Keyed on cycle AND poolSize, not cycle alone: dailyAnswers takes the pool
+  // as a caller-supplied argument, so nothing stops two calls in one process
+  // from passing different-length pools. A cycle-only key would hand back a
+  // permutation sized for the wrong pool, and the non-null assertions below
+  // would turn the resulting out-of-range read into a silently wrong answer
+  // instead of a crash. Do not simplify this back to cycle alone.
+  const key = `${cycle}|${poolSize}`;
+  let cached = permutations.get(key);
   if (!cached) {
     const indices = Array.from({ length: poolSize }, (_, i) => i);
     cached = shuffled(indices, mulberry32(hashSeed(`${SALT}|cycle|${cycle}`)));
-    permutations.set(cycle, cached);
+    permutations.set(key, cached);
   }
   return cached;
 }

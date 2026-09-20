@@ -6,20 +6,26 @@ import tseslint from 'typescript-eslint';
 // call expressions, not bare globals). Kept in sync with the FORBIDDEN
 // token list in src/engine/__tests__/architecture.test.ts so ESLint and the
 // architecture test reject exactly the same set.
-const ENGINE_HOST_API_SYNTAX = [
-  {
-    selector: "MemberExpression[object.name='Date'][property.name='now']",
-    message: 'engine/ must not read Date.now(). See Global Constraints: engine/ touches no host API.',
-  },
-  {
-    selector: "MemberExpression[object.name='Math'][property.name='random']",
-    message: 'engine/ must not call Math.random(). See Global Constraints: engine/ touches no host API.',
-  },
-  {
-    selector: "CallExpression[callee.name='fetch']",
-    message: 'engine/ must not call fetch(). See Global Constraints: engine/ touches no host API.',
-  },
-];
+//
+// Each selector is its own named constant, not just an array element, so an
+// override can reference "the Math.random rule" by name. An override that
+// picked by array index instead would silently start exempting the wrong
+// rule if a selector were ever inserted or reordered — and dropping a
+// banned-syntax check produces no failing test and no lint error, so nobody
+// would notice until a manual audit.
+const DATE_NOW_SYNTAX = {
+  selector: "MemberExpression[object.name='Date'][property.name='now']",
+  message: 'engine/ must not read Date.now(). See Global Constraints: engine/ touches no host API.',
+};
+const MATH_RANDOM_SYNTAX = {
+  selector: "MemberExpression[object.name='Math'][property.name='random']",
+  message: 'engine/ must not call Math.random(). See Global Constraints: engine/ touches no host API.',
+};
+const FETCH_SYNTAX = {
+  selector: "CallExpression[callee.name='fetch']",
+  message: 'engine/ must not call fetch(). See Global Constraints: engine/ touches no host API.',
+};
+const ENGINE_HOST_API_SYNTAX = [DATE_NOW_SYNTAX, MATH_RANDOM_SYNTAX, FETCH_SYNTAX];
 
 // `new Date(...)` is banned everywhere in engine/ except clock.ts, which
 // converts an epoch-day integer into a calendar string and reads no host
@@ -81,9 +87,13 @@ export default [
     // architecture test's __tests__ skip in src/engine/__tests__/architecture.test.ts,
     // which already excludes test files from the FORBIDDEN-token scan; do not
     // widen this beyond new Date / Date.now.
+    //
+    // Selected by name (MATH_RANDOM_SYNTAX, FETCH_SYNTAX), not by array
+    // index into ENGINE_HOST_API_SYNTAX, so inserting or reordering a
+    // selector elsewhere cannot silently change which rule this exempts.
     files: ['src/engine/__tests__/**/*.{ts,tsx}'],
     rules: {
-      'no-restricted-syntax': ['error', ENGINE_HOST_API_SYNTAX[1], ENGINE_HOST_API_SYNTAX[2]],
+      'no-restricted-syntax': ['error', MATH_RANDOM_SYNTAX, FETCH_SYNTAX],
     },
   },
 ];

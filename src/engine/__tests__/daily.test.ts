@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { dailyAnswers, dailyNumber } from '../daily';
-import { VARIANT_ORDER } from '../constants';
+import { VARIANT_ORDER, VARIANTS } from '../constants';
 
 const POOL = Array.from({ length: 1500 }, (_, i) => `W${String(i).padStart(4, '0')}`);
 
@@ -60,6 +60,39 @@ describe('dailyAnswers', () => {
     // Measured with this implementation: 214 days x 7 slots against a
     // 1500-word pool yields 1498 distinct words (see comment above).
     expect(distinctWords.size).toBeGreaterThanOrEqual(1490);
+  });
+
+  // Review fix: the permutation cache used to be keyed on cycle alone. A
+  // cycle is shared by any pool size (cycle = floor(cursor / poolSize)), so
+  // two calls landing in the same cycle with differently-sized pools would
+  // read back a permutation shaped for whichever pool got there first. That
+  // is a pure-function violation: dailyAnswers's result for (dayKey, variant,
+  // pool) must not depend on which OTHER pool sizes happened to be queried
+  // earlier in the process for the same cycle.
+  //
+  // vi.resetModules() + dynamic import gives each side of this comparison
+  // its own module-level `permutations` cache, so "reference" is computed
+  // with a clean cache and "result" is computed with a cache already primed,
+  // for the same cycle, by an unrelated, differently-sized pool.
+  it('is unaffected by a differently-sized pool cached earlier for the same cycle', async () => {
+    const dayKey = '2026-01-01'; // day 0 -> cursor base 0, cycle 0 for any pool size > 6.
+    const pool = Array.from({ length: 30 }, (_, i) => `P${String(i).padStart(2, '0')}`);
+    const unrelatedPool = Array.from({ length: 12 }, (_, i) => `X${i}`);
+
+    vi.resetModules();
+    const clean = await import('../daily');
+    const reference = clean.dailyAnswers(dayKey, 'quarteto', pool);
+
+    vi.resetModules();
+    const tainted = await import('../daily');
+    tainted.dailyAnswers(dayKey, 'quarteto', unrelatedPool); // primes cycle 0 with the wrong pool size
+    const result = tainted.dailyAnswers(dayKey, 'quarteto', pool);
+
+    expect(result).toEqual(reference);
+    expect(result).toHaveLength(VARIANTS.quarteto.boards);
+    for (const word of result) expect(pool).toContain(word);
+
+    vi.resetModules();
   });
 });
 
