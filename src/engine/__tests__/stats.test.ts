@@ -47,4 +47,21 @@ describe('applyResult', () => {
     expect(stats.streak).toBe(1);
     expect(stats.played).toBe(2);
   });
+
+  // The two cases above only ever exercise `mode` and `dayKey` moving
+  // together (the `won`/`lost` helpers couple them), so the guard
+  // `result.mode !== 'diario' || result.dayKey === null` has never been
+  // pinned to a single clause. Constructed directly, not through the
+  // helpers, so each case isolates one clause.
+  it('does not touch the streak when mode is infinito even with a real dayKey', () => {
+    let stats = applyResult(emptyStats(), won('2026-09-19', 4));
+    stats = applyResult(stats, { won: true, attempts: 2, dayKey: '2026-09-20', mode: 'infinito' });
+    expect(stats.streak).toBe(1);
+  });
+
+  it('does not touch the streak when dayKey is null even with mode diario', () => {
+    let stats = applyResult(emptyStats(), won('2026-09-19', 4));
+    stats = applyResult(stats, { won: true, attempts: 2, dayKey: null, mode: 'diario' });
+    expect(stats.streak).toBe(1);
+  });
 });
