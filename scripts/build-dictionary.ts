@@ -156,6 +156,7 @@ async function loadFrequencyRank(): Promise<Map<string, number>> {
 
 interface WiktionarySense {
   readonly form_of?: readonly unknown[];
+  readonly tags?: readonly string[];
 }
 
 interface WiktionaryEntry {
@@ -170,6 +171,45 @@ interface WiktionaryEntry {
 function isFormOf(entry: WiktionaryEntry): boolean {
   if ((entry.tags ?? []).includes('form-of')) return true;
   return (entry.senses ?? []).some((sense) => (sense.form_of?.length ?? 0) > 0);
+}
+
+/**
+ * True when Wiktionary itself tags this entry (or any of its senses) as a
+ * loanword from another language — "Anglicism" is the only such tag this
+ * dataset uses at any real scale (verified: 47 entries). This coverage is
+ * real but incomplete — "pager" and "remix" are equally obvious English
+ * loanwords with no such tag on their entries — so this catches some
+ * anglicisms (game, koala, laptop, notebook, reggae, check-up, ...) but not
+ * all of them. The remainder needs the manual blocklist; see the Task 8
+ * report for why no broader loanword heuristic is used here.
+ */
+function isTaggedForeignLoanword(entry: WiktionaryEntry): boolean {
+  if ((entry.tags ?? []).includes('Anglicism')) return true;
+  return (entry.senses ?? []).some((sense) => (sense.tags ?? []).includes('Anglicism'));
+}
+
+/**
+ * Wiktionary's own markers for a sense nobody would expect a reader to
+ * recognize today.
+ */
+const OBSCURITY_TAGS = new Set(['archaic', 'obsolete', 'rare', 'uncommon', 'dated']);
+
+/**
+ * True when EVERY sense of this entry is tagged as archaic/obsolete/rare/
+ * uncommon/dated — i.e. Wiktionary itself has no sense of this word it
+ * considers to be in current, ordinary use. A word with at least one
+ * plain, untagged sense (even alongside other, rarer ones) is not excluded
+ * by this check; only found in the Task 8 second sample review — e.g.
+ * "later" qualifies only via two verb senses tagged 'obsolete' and
+ * 'uncommon' respectively ("estar oculto, viver em latência"; "o mesmo que
+ * latejar"), which is exactly the kind of real-but-unrecognizable word this
+ * catches. Affects 403 of ~82,900 qualifying entries in this dataset — a
+ * narrow, data-grounded cut, not an invented heuristic.
+ */
+function isEntirelyObscure(entry: WiktionaryEntry): boolean {
+  const senses = entry.senses ?? [];
+  if (senses.length === 0) return false;
+  return senses.every((sense) => (sense.tags ?? []).some((tag) => OBSCURITY_TAGS.has(tag)));
 }
 
 /**
@@ -208,6 +248,8 @@ async function loadWiktionaryHeadForms(): Promise<Set<string>> {
     if (entry.lang_code !== 'pt') continue;
     if (!ANSWER_ELIGIBLE_POS.has(entry.pos)) continue;
     if (isFormOf(entry)) continue;
+    if (isTaggedForeignLoanword(entry)) continue;
+    if (isEntirelyObscure(entry)) continue;
     heads.add(toNfc(entry.word));
   }
 

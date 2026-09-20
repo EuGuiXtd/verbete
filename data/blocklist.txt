@@ -29,3 +29,78 @@ porra   # strong vulgar interjection/noun — vulgar in every sense Wiktionary l
 tesão   # slang for sexual arousal — this is the word's dominant popular sense in Brazilian Portuguese, even though it also has an archaic literal "stiffness" sense
 mongo   # ableist slur ("pessoa que apresenta alguma limitação mental ou cognitiva", tagged pejorative) — this is the word's primary popular usage despite two unrelated botanical/ornithological senses
 bicha   # in Brazilian Portuguese this word's dominant popular usage is a slur (tagged pejorative) and/or vulgar (genitalia, prostitution) despite unrelated senses (queue, worm) that are more common in European Portuguese
+bolas   # plural of "bola" (ball) whose Wiktionary entry's own sense is "testículos" (testicles) — vulgar, not a milder synonym
+vadia   # noun sense explicitly tagged pejorative ("mulher cuja conduta é considerada imoral..."); this was found by the same vulgar/pejorative scan as the words above and should have been added then — a review-process miss, corrected in the second sample review
+
+# The words below were found by a systematic scan (Task 8, second review)
+# for answer candidates that ALSO have a Wiktionary entry whose part of
+# speech is grammatically ineligible (pronoun, conjunction, preposition,
+# interjection, proper name, ...) for the SAME word text. Most words in
+# that situation are fine (e.g. "certo" is a genuine, dominant adjective
+# that separately also functions as an interjection — the adjective sense
+# is why anyone recognizes the word). These specific ones are not: their
+# only Wiktionary-qualifying sense is an obscure/rare technicality, while
+# the word's actual real-world recognition is entirely carried by the
+# grammatically-ineligible sense that correctly can't qualify it. This is
+# a real, individually-verified sense mismatch, not a guess — see the
+# Task 8 report for the full review of all 41 candidates this scan found.
+algum   # qualifies only via an obscure colloquial noun sense ("quantidade de dinheiro", some cash); the word's actual identity for any reader is the pronoun/determiner "some/any"
+minha   # qualifies only via an archaic noun sense ("mulher, esposa do próprio", one's wife); the word's actual identity for any reader is the possessive pronoun "my"
+porém   # qualifies only via an obscure noun sense ("empecilho", obstacle); the word's actual identity for any reader is the conjunction "however"
+senão   # qualifies only via a literary noun sense ("defeito", flaw); the word's actual identity for any reader is the conjunction/preposition "otherwise/except"
+basta   # qualifies only via obscure historical sewing/mattress-making terms; the word's actual identity for any reader is the interjection "basta!" (enough!)
+chupa   # qualifies only via obscure noun senses (a sea anemone; an old word for chimney); the word's actual identity for any reader is the (mildly vulgar-adjacent) taunting interjection "chupa!"
+souza   # qualifies via a real but obscure noun sense (a wild dove species); its high frequency rank comes entirely from "Souza" the surname, a coincidence of the frequency list being lowercased, not from anyone using the dove sense
+jesus   # a real Wiktionary noun sense exists (figurative "a person embodying redemption"), but this is overwhelmingly recognized as a proper name/religious figure — flagged for sensitivity rather than a filter defect
+pager   # English loanword; Wiktionary's own "Anglicism" tag (now excluded, see isTaggedForeignLoanword) does not happen to be applied to this specific entry
+remix   # English loanword; same as pager — not tagged Anglicism in this dataset despite being one
+enter   # English computing loanword (the Enter/Return key); not tagged Anglicism in this dataset
+login   # English computing loanword; not tagged Anglicism in this dataset
+slide   # English loanword (Wiktionary's own gloss cross-references the Portuguese spelling "eslaide"); not tagged Anglicism in this dataset
+maple   # English loanword (Wiktionary's own gloss cross-references the Portuguese spelling "meiple"); not tagged Anglicism in this dataset
+patos   # qualifies only via an obscure, archaic sense borrowed from Greek/Latin rhetoric ("paixão, excesso, catástrofe... pathos"); the word's actual identity for any reader is the plural of "pato" (duck) or the Brazilian city of the same name, both correctly ineligible
+incha   # qualifies only via obscure senses ("ódio, ira, raiva"; a Portugal-regional word for a big sea wave); the word's real association is with "inchar" (to swell)
+cuido   # qualifies only via a rare, archaic noun use as a synonym of "cuidado" (care); the word's real association is with "eu cuido" (I take care), correctly ineligible as a verb form
+brota   # qualifies only via obscure senses (a codfish-like fish; literary "fonte, nascente", a spring/water source); the word's real association is with "brotar" (to sprout), correctly ineligible as a verb form — a cautious call, not as clear-cut as the others above
+fecha   # qualifies only via an obscure Brazil-slang noun sense ("briga, tumulto, confusão"); the word's actual identity for any reader is "ele fecha" (he/it closes), correctly ineligible as a verb form
+goles   # qualifies only via an obscure heraldry term (the color red/"gules" on a coat of arms); the word's actual identity for any reader is the plural of "gole" (a sip/gulp), correctly ineligible
+modem   # English computing loanword; not tagged Anglicism in this dataset
+lucas   # qualifies only via a Portugal-regional colloquialism ("aquele que não toma a sério as coisas"); for a Brazilian reader this reads as the first name "Lucas" or slang for "a thousand reais" (plural of "luca"), both correctly ineligible
+nylon   # English loanword (Wiktionary's own gloss cross-references the Portuguese spelling "náilon"); not tagged Anglicism in this dataset
+
+# The words below are real, correctly-non-form-of Wiktionary headwords, but
+# for such narrow specialist/naturalist/historical vocabulary (a pigeon
+# species, a pig breed, a Northern-Hemisphere fish, a defunct foreign
+# currency, a Galician-dialect textile term) that essentially no player
+# would recognize the word's actual meaning at all — as opposed to a merely
+# uncommon-but-inferable word like a demonym or regionalism. Each also
+# happens to be a common Brazilian first name or place name (capitalized
+# forms excluded correctly by the case-sensitive Wiktionary match), and each
+# ranks in the frequency list almost certainly because of that unrelated
+# proper name's popularity in the OpenSubtitles corpus, not because anyone
+# uses the obscure common-noun sense — the same failure this scan already
+# found and blocklisted "souza" for above.
+simão   # "macaco" (monkey), tagged popular/regional — not the first name Simão
+lúcio   # a predatory freshwater fish (pike, genus Esox) not native to Brazil — not the first name Lúcio
+macau   # the name of a pig breed — not the Macau special administrative region
+sucre   # a defunct Ecuadorian currency unit (1884-2000) — not the city of Sucre, Bolivia
+cairo   # a niche textile term (coir, coconut-husk fiber for rope-making); every one of its other senses is tagged as Galician-dialect, not standard Portuguese — not the city of Cairo, Egypt
+spray   # English loanword (Wiktionary's own gloss cross-references the Portuguese spelling "esprei"); not tagged Anglicism in this dataset
+
+# anões and redes are genuine plurals ("plural de anão" / "plural de rede")
+# whose Wiktionary entries are missing the structured form-of marking
+# (tags/form_of) that every other plural entry checked in this project
+# carries — the gloss text says "plural de X" but the machine-readable
+# fields that isFormOf() reads do not. This is a real gap in the source
+# data itself, not a filter bug on this project's side; found by manual
+# sample review, not by a general rule (a text-based "does the gloss start
+# with 'plural de'" fallback was considered and rejected — it produces
+# false positives on ordinary prose glosses like "arte: forma de expressão
+# subjetiva..." and would incorrectly exclude genuinely independent words
+# like "atriz" and "melhor", which are also, technically, inflected forms
+# of "ator" and "bom" but are always treated as their own headwords). See
+# the Task 8 report.
+anões
+redes
+
+japão   # one qualifying sense is explicitly tagged pejorative (an ethnic-slur-adjacent synonym for "japonês"/Japanese); the other (an obscure regional synonym for "sapão", a large toad) is too obscure to justify keeping a word with an ethnically-charged pejorative sense — flagged for sensitivity, found in the systematic vulgar/pejorative-tag scan

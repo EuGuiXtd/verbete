@@ -94,9 +94,9 @@ not `unmunch`).
   18,216 as-is, and asked for no further tightening. Raw generated file: 30,653 bytes; **gzip -9:
   18,155 bytes**.
 
-- **Answer list: 1,655**, ranked by frequency, restricted to genuine head-forms per the
+- **Answer list: 1,617**, ranked by frequency, restricted to genuine head-forms per the
   Portuguese Wiktionary (see below), NOSUGGEST/blocklist-filtered, collision-resolved — above
-  the 1,500-word `DAILY_POOL_SIZE` floor. Raw generated file: 19,928 bytes; **gzip -9: 6,609
+  the 1,500-word `DAILY_POOL_SIZE` floor. Raw generated file: 19,504 bytes; **gzip -9: 6,473
   bytes**.
 
   This required a controller-ruled change mid-task: the first version of this pipeline used
@@ -109,8 +109,19 @@ not `unmunch`).
   Wiktionary has a matching entry whose part of speech is noun/adjective/adverb/verb and which
   is not itself a form-of/inflection entry. This fixed the volume problem (`carro`-class nouns
   have real Wiktionary entries) and, as a side effect, gave a much stronger, machine-checkable
-  signal against proper nouns and plurals than the capitalization heuristic alone. Full pipeline,
-  evidence, and honest sample reviews (three of them) are in the Task 8 report
+  signal against proper nouns and plurals than the capitalization heuristic alone.
+
+  A first random sample against this new list (1,655 words at the time) still surfaced real
+  leaks: a surname passing via a coincidental obscure noun entry, several English loanwords
+  Wiktionary doesn't tag as such, words qualifying only through an archaic/obsolete/rare sense
+  while their real-world identity is a grammatically-ineligible one (pronoun, conjunction,
+  interjection), and one further vulgar/pejorative term missed by the first pass. This led to
+  two more data-grounded filters (excluding Wiktionary's own "Anglicism" tag and its
+  archaic/obsolete/rare/uncommon/dated tags where *every* sense of an entry carries one) plus 33
+  additional `data/blocklist.txt` entries (41 total), each individually verified against the raw
+  Wiktionary JSON rather than pattern-matched. Final count after four full sample reviews: 1,617.
+  Full
+  pipeline, evidence, and all four honest sample reviews are in the Task 8 report
   (`.superpowers/sdd/2026-09-20-verbete/task-8-report.md`).
 
 ## Frequency word list (`pt_br_50k.txt`)
