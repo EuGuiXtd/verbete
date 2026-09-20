@@ -1,5 +1,31 @@
 node_modules/
 dist/
+dist-ssr/
 data/raw/
 .DS_Store
 *.local
+.superpowers/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Test / build artifacts
+coverage/
+test-results/
+playwright-report/
