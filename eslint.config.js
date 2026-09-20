@@ -70,4 +70,20 @@ export default [
       'no-restricted-syntax': ['error', ...ENGINE_HOST_API_SYNTAX],
     },
   },
+  {
+    // Task 12 amendment: engine test files are exempt from the new-Date and
+    // Date.now bans, and from nothing else. A test building a fixed UTC
+    // timestamp (e.g. `new Date(Date.UTC(...))`) to drive the injected clock
+    // is exercising the engine deterministically, not reaching for a host
+    // clock. Math.random and fetch stay banned here: a blanket __tests__
+    // exemption would let a test reach for Math.random and go nondeterministic,
+    // which is exactly what engine purity exists to prevent. This mirrors the
+    // architecture test's __tests__ skip in src/engine/__tests__/architecture.test.ts,
+    // which already excludes test files from the FORBIDDEN-token scan; do not
+    // widen this beyond new Date / Date.now.
+    files: ['src/engine/__tests__/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': ['error', ENGINE_HOST_API_SYNTAX[1], ENGINE_HOST_API_SYNTAX[2]],
+    },
+  },
 ];
