@@ -67,15 +67,46 @@ on.
    > "License(s): (LGPL-3.0-only OR MPL-1.1) AND (GPL-2.0-only OR LGPL-2.1-only OR MPL-1.1)"
 
    Seen at `https://packages.fedoraproject.org/pkgs/hunspell-pt/hunspell-pt-BR/`, 2026-09-20.
-   This is a compound SPDX expression for the whole Fedora package, which bundles more than the
-   spellchecking dictionary (the `hunspell-pt-BR` package also ships a thesaurus and other
-   components); the leading `(LGPL-3.0-only OR MPL-1.1)` clause is the one that names the same
-   dictionary/affix data this project uses.
+   This is a compound SPDX expression with two `AND`-joined clauses. The leading
+   `(LGPL-3.0-only OR MPL-1.1)` clause is the one to read: it is the only clause of the two that
+   matches the LGPL/MPL pattern the other three readings above share, and is treated here as
+   Fedora's reading of the same dictionary/affix data this project uses.
 
 **What this project relies on:** the project treats this data, and the word lists derived from
 it, as licensed under **LGPL-3.0**, the grant common to all four readings above, and
 additionally under the **Mozilla Public License** to whatever extent upstream's own unversioned
 MPL grant permits. No specific MPL version is asserted.
+
+### Task 8 measured build results
+
+The plan's spec guessed 8,000–15,000 guesses and 1,500–3,000 answers. Those were hypotheses;
+these are the measured numbers from actually running the pipeline in
+`scripts/build-dictionary.ts` against the raw sources above (affix-expanded via
+`hunspell-reader`, not `unmunch`).
+
+- **Guess list: 18,216** five-letter comparison keys (normalized: accent-free, uppercase),
+  after affix expansion, NFC length filtering, and dropping tokens that appear only capitalized
+  in `pt_BR.dic` (the proper-noun/acronym heuristic — see NOTICE.md and the Task 8 report for the
+  sample review of it). This overshoots the plan's 8k–15k estimate by about 20%. Before
+  concluding the five-letter filter needs tightening, note that VERO's full affix expansion
+  produces 19,603 raw five-letter alphabetic forms, of which only 1,387 are dropped as
+  capitalized-only — i.e. the overshoot is mostly real five-letter Portuguese words (heavily
+  inflected verb forms), not proper-noun leakage. See the Task 8 report for the full sample
+  review and the controller's call on whether this needs tightening further.
+
+- **Answer list: BLOCKED below the 1,500-word `DAILY_POOL_SIZE` floor.** Restricting candidate
+  answers to genuine dictionary head-forms (a word equal to the literal, unmodified `word/flags`
+  line in `pt_BR.dic` — see the Task 8 report for why the naive `prefix === '' && suffix === ''`
+  signal hunspell-reader exposes is unreliable and had to be replaced) leaves 7,553 five-letter,
+  non-proper head-forms. Intersecting those against `pt_br_50k.txt` yields only **1,217–1,432**
+  candidates depending on exact-text vs. accent-insensitive matching — short of the 1,500 answers
+  `assertBuildInvariants` requires, and short even before the NOSUGGEST/blocklist/collision drops
+  in pipeline steps 7–8 are applied. This is a real ceiling of the two raw sources on hand, not a
+  tunable parameter (`ANSWER_TARGET` was already unconstraining at this size). Full analysis,
+  including a "carro"/"porta"/"livro"/"roupa" case study showing VERO omits standalone entries
+  for some extremely common nouns, is in the Task 8 report
+  (`.superpowers/sdd/2026-09-20-verbete/task-8-report.md`). No generated `answers.generated.ts`
+  is committed until the controller decides how to close this gap.
 
 ## Frequency word list (`pt_br_50k.txt`)
 

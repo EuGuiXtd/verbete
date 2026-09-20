@@ -1,0 +1,7 @@
+# Manual answer blocklist for scripts/build-dictionary.ts.
+#
+# One word per line, any casing/accents (compared via normalize(toNfc(word))
+# against candidate answer keys). Lines are trimmed; '#' starts a comment,
+# to end of line; blank lines are ignored. This never removes a word from
+# the guess list — only from candidate answers — so a blocklisted word
+# stays a valid, accepted guess. Rerun `pnpm dict:build` after editing.
