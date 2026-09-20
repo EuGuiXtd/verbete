@@ -1,10 +1,10 @@
 # NOTICE
 
 This file records third-party attributions for data distributed with this project. It covers
-data only — the game code (React/CSS/engine) is licensed under whatever licence the project
-owner selects, independently of the notices below; the two are separable because the licences
-quoted here are copyleft per file, not per project. See `data/SOURCES.md` for full provenance,
-including sources that are *not* redistributed and so carry no obligation here.
+data only — the intent is for the game code (React/CSS/engine) to remain under whatever licence
+the project owner selects, kept separate from the notices below, which apply only to the
+generated word-list and definition files named in each block. See `data/SOURCES.md` for full
+provenance, including sources that are *not* redistributed and so carry no obligation here.
 
 ## VERO Brazilian Portuguese dictionary — word lists
 
@@ -22,11 +22,11 @@ derived word list, not the original dictionary files.
 License version 3 (LGPLv3) ... and the Mozilla Public License", without naming an MPL version.
 Downstream packagers who redistribute the same data disagree on how to read this (see
 `data/SOURCES.md` for the full four-way comparison: Debian reads LGPL-2.1+ only; wooorm reads
-LGPL-3.0 OR MPL-2.0; Fedora reads LGPL-3.0-only OR MPL-1.1). Rather than assert a reading upstream
-itself never wrote down, this project distributes the derived word lists under
-**LGPL-3.0-or-later** — the one grant every reading agrees exists — and additionally under the
-**Mozilla Public License**, to whatever extent upstream's unversioned MPL grant permits. No
-specific MPL version is asserted.
+LGPL-3.0 OR MPL-2.0; Fedora reads (LGPL-3.0-only OR MPL-1.1) for the dictionary component).
+Rather than assert a reading upstream itself never wrote down, this project distributes the
+derived word lists under **LGPL-3.0** — the grant common to all four readings — and additionally
+under the **Mozilla Public License**, to whatever extent upstream's unversioned MPL grant
+permits. No specific MPL version is asserted.
 
 ## Wikcionário (Portuguese Wiktionary) — word definitions
 

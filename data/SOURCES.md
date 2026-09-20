@@ -63,19 +63,19 @@ on.
 
    Seen via the npm registry, `https://registry.npmjs.org/dictionary-pt/latest`, 2026-09-20.
 
-4. **Fedora** packages the same data with the SPDX expression:
-   > `(LGPL-3.0-only OR MPL-1.1)`
+4. **Fedora**'s `hunspell-pt-BR` package page states:
+   > "License(s): (LGPL-3.0-only OR MPL-1.1) AND (GPL-2.0-only OR LGPL-2.1-only OR MPL-1.1)"
 
-   (Per the project's own research; not independently re-verified here, since every further
-   downstream source is, by construction, another packager's reading of the same ambiguous
-   upstream text — see "Unresolved" below.)
+   Seen at `https://packages.fedoraproject.org/pkgs/hunspell-pt/hunspell-pt-BR/`, 2026-09-20.
+   This is a compound SPDX expression for the whole Fedora package, which bundles more than the
+   spellchecking dictionary (the `hunspell-pt-BR` package also ships a thesaurus and other
+   components); the leading `(LGPL-3.0-only OR MPL-1.1)` clause is the one that names the same
+   dictionary/affix data this project uses.
 
-**What this project relies on:** the one grant every reading above agrees exists is LGPL, at
-least version 3 or later (the least-restrictive version compatible with all four statements,
-since three of the four name LGPL-3.0 and Debian's older LGPL-2.1+ is itself "or later"). The
-project therefore treats this data, and the word lists derived from it, as licensed under
-**LGPL-3.0-or-later**, and additionally under the **Mozilla Public License** to whatever extent
-upstream's own unversioned MPL grant permits. No specific MPL version is asserted.
+**What this project relies on:** the project treats this data, and the word lists derived from
+it, as licensed under **LGPL-3.0**, the grant common to all four readings above, and
+additionally under the **Mozilla Public License** to whatever extent upstream's own unversioned
+MPL grant permits. No specific MPL version is asserted.
 
 ## Frequency word list (`pt_br_50k.txt`)
 
@@ -123,7 +123,7 @@ upstream's own unversioned MPL grant permits. No specific MPL version is asserte
 
 | Source | Redistributed? | Licence (as this project treats it) |
 |---|---|---|
-| `pt_BR.dic` / `pt_BR.aff` (VERO) | Yes — generated word lists ship in the bundle | LGPL-3.0-or-later, additionally MPL to the extent upstream's unversioned grant permits (see "Licence" above — ambiguous upstream, four disagreeing downstream readings) |
+| `pt_BR.dic` / `pt_BR.aff` (VERO) | Yes — generated word lists ship in the bundle | LGPL-3.0, additionally MPL to the extent upstream's unversioned grant permits (see "Licence" above — ambiguous upstream, four disagreeing downstream readings) |
 | `pt_br_50k.txt` (FrequencyWords) | No — build-time ranking input only | CC BY-SA 4.0 (content), per upstream README |
 | `ptwiktionary.jsonl` (kaikki/Wiktionary) | Will be, once added in Task 21 (`data/definicoes.json`) | CC BY-SA 4.0 (Wikcionário) |
 
