@@ -15,7 +15,10 @@ by Raimundo Santos Moura and the LibreOffice pt-BR community
 
 **Adaptation made:** the affix rules were expanded against the dictionary's word stems, the
 result was filtered to five-letter forms only, and a subset of those was selected as candidate
-answers using frequency-based ranking (see the frequency-list notice below). What ships is a
+answers using frequency-based ranking (see the frequency-list notice below) and restricted to
+words confirmed as genuine dictionary head-forms by the Portuguese Wiktionary (Wikcionário; see
+the Wikcionário notice below — used here only to decide list membership, at build time, not
+redistributed as part of this word list; no Wiktionary text is embedded in it). What ships is a
 derived word list, not the original dictionary files.
 
 **Licence:** upstream states its own data is licensed under "the GNU Lesser General Public

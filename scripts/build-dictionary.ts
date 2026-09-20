@@ -1,23 +1,28 @@
-// Builds the game's two word lists from the raw VERO Hunspell dictionary:
+// Builds the game's two word lists from the raw VERO Hunspell dictionary and
+// the raw Portuguese Wiktionary extract:
 //
 //   - guesses.generated.ts — every accepted five-letter guess, as normalized
 //     (accent-free, uppercase) comparison keys, packed with the base-26
 //     delta-varint codec.
 //   - answers.generated.ts — a small curated pool of five-letter answers, in
 //     their accented display form, ranked by real-world frequency and
-//     restricted to dictionary head-forms (no conjugations or plurals).
+//     restricted to genuine Wiktionary dictionary head-forms (no
+//     conjugations or plurals).
 //
 // Run with: pnpm dict:build
 //
-// Pipeline (see .superpowers/sdd/2026-09-20-verbete/task-8-brief.md):
+// Pipeline (see .superpowers/sdd/2026-09-20-verbete/task-8-brief.md, as
+// amended by the controller after the first version of this pipeline shipped
+// a real bug — see "head-form authority" below):
 //   1. Expand pt_BR.dic against pt_BR.aff (affix rules) with hunspell-reader.
 //   2. Keep forms whose NFC length is exactly five Latin letters.
 //   3. Drop tokens that appear only capitalized in the .dic (proper nouns,
 //      acronyms) — see the note below on why this heuristic, not DELAF_PB.
 //   4. The surviving set, normalized, sorted, deduplicated: the guess list.
 //   5. Rank pt_br_50k.txt (frequency list) into a lookup.
-//   6. Candidate answers: guess-list head-forms present in the frequency
-//      list, ranked best first, top ANSWER_TARGET.
+//   6. Candidate answers: guess-list words that are genuine Wiktionary
+//      head-forms (see loadWiktionaryHeadForms below) AND present in the
+//      frequency list, ranked best first, top ANSWER_TARGET.
 //   7. Drop NOSUGGEST-flagged words and the manual data/blocklist.txt.
 //   8. Resolve normalization collisions: keep the highest-frequency accented
 //      form per comparison key.
@@ -29,8 +34,30 @@
 // This build relies solely on the capitalization heuristic below. A manual
 // 100-word sample review of the built answer list is the empirical check on
 // whether that heuristic is sufficient — see the Task 8 report.
+//
+// NOTE on step 6, "head-form authority": the first version of this pipeline
+// used VERO's own `.dic` structure to decide whether a word was a genuine
+// head-form (noun/adjective/adverb/infinitive-verb) versus a derived
+// conjugation or plural. That turned out to be the wrong authority: VERO has
+// no standalone entry at all for some very common nouns (carro, porta,
+// livro, roupa — verified empirically), and separately lists some plurals
+// (ouros, olhos, ...) as literal head entries rather than deriving them via
+// a suffix rule, so no amount of care reading VERO's structure could recover
+// the right answer. The controller's ruling (pulling Task 21's Wiktionary
+// extract forward into this task) replaces it: a word is answer-eligible iff
+// the Portuguese Wiktionary has a matching entry whose part of speech is
+// noun/adjective/adverb/verb and which is not itself a form-of/inflection
+// entry. See loadWiktionaryHeadForms and the Task 8 report for the evidence.
+//
+// The old VERO-`.dic`-based conjugation check is not kept as a pre-filter:
+// empirically, every case it caught (e.g. CANTA, a form-of "cantar") is also
+// caught by Wiktionary's own form-of tagging, so it added no coverage, and
+// dropping it keeps one authority instead of two disagreeing ones.
 
+import { createReadStream } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
+import { createGunzip } from 'node:zlib';
 import { HunspellReader } from 'hunspell-reader';
 import { normalize, toNfc } from '../src/engine/normalize';
 import { packSortedWords } from '../src/data/codec';
@@ -40,10 +67,20 @@ const RAW_DIR = 'data/raw';
 const DIC_PATH = `${RAW_DIR}/pt_BR.dic`;
 const AFF_PATH = `${RAW_DIR}/pt_BR.aff`;
 const FREQUENCY_PATH = `${RAW_DIR}/pt_br_50k.txt`;
+const WIKTIONARY_PATH = `${RAW_DIR}/ptwiktionary.jsonl.gz`;
 const BLOCKLIST_PATH = 'data/blocklist.txt';
 
 const WORD_LENGTH = 5;
 const WORD_KEY_RE = /^[A-Z]{5}$/;
+
+/**
+ * wiktextract part-of-speech values this project treats as citation
+ * (head-form) parts of speech: noun, adjective, adverb, infinitive verb.
+ * Conjugated verb forms and inflected nouns/adjectives carry these same
+ * `pos` values too — they're excluded separately, by `isFormOf` below, not
+ * by `pos`.
+ */
+const ANSWER_ELIGIBLE_POS = new Set(['noun', 'adj', 'adv', 'verb']);
 
 /**
  * How many frequency-ranked, head-form candidates to consider before
@@ -117,6 +154,66 @@ async function loadFrequencyRank(): Promise<Map<string, number>> {
   return rank;
 }
 
+interface WiktionarySense {
+  readonly form_of?: readonly unknown[];
+}
+
+interface WiktionaryEntry {
+  readonly word: string;
+  readonly lang_code: string;
+  readonly pos: string;
+  readonly tags?: readonly string[];
+  readonly senses?: readonly WiktionarySense[];
+}
+
+/** True for a conjugated/inflected/plural entry — "canta" (verb, form-of "cantar"), "olhos" (noun, form-of "olho"), etc. */
+function isFormOf(entry: WiktionaryEntry): boolean {
+  if ((entry.tags ?? []).includes('form-of')) return true;
+  return (entry.senses ?? []).some((sense) => (sense.form_of?.length ?? 0) > 0);
+}
+
+/**
+ * Loads the set of words with at least one genuine Portuguese Wiktionary
+ * head-form entry: `pos` in ANSWER_ELIGIBLE_POS and not a form-of/inflection
+ * entry (see isFormOf). This is the answer-eligibility authority (see the
+ * "head-form authority" note at the top of this file for why VERO's own
+ * structure isn't used for this anymore).
+ *
+ * Reads data/raw/ptwiktionary.jsonl.gz — the raw wiktextract JSONL for
+ * pt.wiktionary.org, one object per line, every language it documents
+ * (~330 MB uncompressed) — via a streaming gunzip + line reader, so the
+ * full file is never held in memory at once.
+ *
+ * Matching against VERO-derived candidate words is exact-text (both sides
+ * NFC-normalized, case included, not accent-stripped): Wiktionary writes
+ * common words lowercase and proper nouns capitalized, same as VERO and
+ * standard Portuguese orthography, so requiring an exact match is also what
+ * keeps a capitalized-only Wiktionary entry (e.g. "Marte", "Leila" — both
+ * confirmed to have no lowercase counterpart in Wiktionary either) from
+ * matching a lowercase VERO candidate.
+ */
+async function loadWiktionaryHeadForms(): Promise<Set<string>> {
+  const heads = new Set<string>();
+  const input = createReadStream(WIKTIONARY_PATH).pipe(createGunzip());
+  const lines = createInterface({ input, crlfDelay: Infinity });
+
+  for await (const line of lines) {
+    if (!line) continue;
+    let entry: WiktionaryEntry;
+    try {
+      entry = JSON.parse(line) as WiktionaryEntry;
+    } catch {
+      continue;
+    }
+    if (entry.lang_code !== 'pt') continue;
+    if (!ANSWER_ELIGIBLE_POS.has(entry.pos)) continue;
+    if (isFormOf(entry)) continue;
+    heads.add(toNfc(entry.word));
+  }
+
+  return heads;
+}
+
 /** Runs the affix-expansion + filtering pipeline (steps 1–8) and returns the two word lists. */
 export async function buildDictionary(): Promise<BuildResult> {
   const reader = await HunspellReader.createFromFiles(AFF_PATH, DIC_PATH);
@@ -124,24 +221,13 @@ export async function buildDictionary(): Promise<BuildResult> {
   const seenKeys = new Set<string>();
   const sawLowercase = new Set<string>();
   const noSuggestWords = new Set<string>();
-  // Accented, lowercase (i.e. non-proper), unmodified dictionary head-forms.
-  //
-  // hunspell-reader's own `prefix`/`suffix` fields are NOT a reliable
-  // head-form signal: for suffix rules that strip part of the stem itself
-  // (e.g. the "-ar" -> "-a" rule that turns "cantar" into "canta", 3rd
-  // person present), the arithmetic in its internal substitution code can
-  // land the computed suffix boundary exactly on the end of the new word,
-  // reporting `suffix === ''` even though a real conjugation was applied
-  // (verified empirically: CANTA, CUIDA, GOSTA, LAMBE, MANDA, MOLDA, PULSA,
-  // TORNA all passed a prefix/suffix-based head-form check while their
-  // `dic` field showed the true root — "cantar/2ajkLY...", etc.).
-  //
-  // The reliable signal is `AffWord.dic`: it carries the *original,
-  // unmodified* "word/flags" text from the raw .dic line through every
-  // recursive affix application untouched. A word is a genuine head-form
-  // iff it equals the word half of that literal line — i.e. no affix
-  // rule of any kind fired for it.
-  const lowercaseHeadForms = new Set<string>();
+  // Every lowercase (i.e. not proper-noun-only), accented five-letter
+  // surface form VERO's affix expansion produces — conjugations and
+  // plurals included. Whether a given form is actually a head-form is no
+  // longer decided from this data at all; it's decided by
+  // loadWiktionaryHeadForms below. This set only needs to hold candidates
+  // worth checking against Wiktionary and the frequency list.
+  const candidateWords = new Set<string>();
 
   for (const affWord of reader.seqAffWords()) {
     const nfc = toNfc(affWord.word);
@@ -154,13 +240,12 @@ export async function buildDictionary(): Promise<BuildResult> {
 
     const firstChar = nfc.charAt(0);
     const isCapitalized = firstChar !== firstChar.toLowerCase();
-    if (!isCapitalized) sawLowercase.add(key);
+    if (!isCapitalized) {
+      sawLowercase.add(key);
+      candidateWords.add(nfc);
+    }
 
     if (affWord.flags.isNoSuggest) noSuggestWords.add(nfc);
-
-    const dicWord = affWord.dic.split('/')[0];
-    const isHeadForm = dicWord === affWord.word;
-    if (isHeadForm && !isCapitalized) lowercaseHeadForms.add(nfc);
   }
 
   // Step 3 + 4: drop keys that never appeared lowercase (proper nouns,
@@ -169,13 +254,18 @@ export async function buildDictionary(): Promise<BuildResult> {
   const guesses = [...seenKeys].filter((key) => sawLowercase.has(key)).sort();
   const guessSet = new Set(guesses);
 
-  // Step 5
-  const frequencyRank = await loadFrequencyRank();
+  // Step 5 and the Wiktionary head-form authority, concurrently — two
+  // independent file reads.
+  const [frequencyRank, wiktionaryHeadForms] = await Promise.all([
+    loadFrequencyRank(),
+    loadWiktionaryHeadForms(),
+  ]);
 
-  // Step 6: guess-list head-forms present in the frequency list, ranked
-  // best first, top ANSWER_TARGET.
-  const ranked = [...lowercaseHeadForms]
+  // Step 6: guess-list words that are genuine Wiktionary head-forms AND
+  // present in the frequency list, ranked best first, top ANSWER_TARGET.
+  const ranked = [...candidateWords]
     .filter((word) => guessSet.has(normalize(word)))
+    .filter((word) => wiktionaryHeadForms.has(word))
     .filter((word) => frequencyRank.has(word))
     .sort((a, b) => frequencyRank.get(a)! - frequencyRank.get(b)!)
     .slice(0, ANSWER_TARGET);
@@ -249,8 +339,12 @@ function renderAnswersSource(answers: readonly string[]): string {
 //
 // Ranked by real-world frequency using a build-time-only frequency list
 // (hermitdave/FrequencyWords, CC BY-SA 4.0) that is never itself
-// redistributed — see data/SOURCES.md. Restricted to dictionary head-forms:
-// no conjugations or plurals ship as answers, only as accepted guesses.
+// redistributed — see data/SOURCES.md. Restricted to genuine Portuguese
+// Wiktionary head-forms (noun/adjective/adverb/infinitive-verb, not a
+// form-of/inflection entry): no conjugations or plurals ship as answers,
+// only as accepted guesses. The Wiktionary extract used to decide this is
+// also build-time-only for this file's purposes (no Wiktionary text is
+// embedded below, only word strings) — see data/SOURCES.md.
 
 export const ANSWERS: readonly string[] = [
 ${entries}

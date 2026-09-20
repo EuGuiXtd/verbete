@@ -5,3 +5,27 @@
 # to end of line; blank lines are ignored. This never removes a word from
 # the guess list — only from candidate answers — so a blocklisted word
 # stays a valid, accepted guess. Rerun `pnpm dict:build` after editing.
+
+# peida — vulgar slang noun ("rabo, ânus, cu" per Wiktionary, categorized
+# there under "Obscenidade"/"Coloquialismo"). Wiktionary correctly keeps it
+# as a genuine noun head-form (it's a real word, just not one this game
+# should show a player as the answer), so the Wiktionary head-form filter
+# alone doesn't exclude it — this is exactly the case the blocklist exists
+# for. Found in the Task 8 sample review.
+peida
+
+# The words below were found by scanning the full answer candidate list
+# against Wiktionary's own "vulgar"/"pejorative" sense tags (Task 8), not
+# just the 100-word sample. Included only where the word's dominant,
+# commonly-recognized sense in Brazilian Portuguese is itself the
+# vulgar/offensive one — a word that merely *also has* an obscure vulgar
+# secondary sense (e.g. "leite"/milk also slang for semen, "velho"/old also
+# a mild pejorative connotation) is deliberately left off this list; see the
+# Task 8 report for the full reasoning and the words considered and kept.
+bosta   # excrement/"shit" — vulgar in every sense Wiktionary lists, no innocent common meaning
+cagar   # "to shit" — vulgar in every sense Wiktionary lists
+merda   # "shit" — vulgar in every sense Wiktionary lists
+porra   # strong vulgar interjection/noun — vulgar in every sense Wiktionary lists
+tesão   # slang for sexual arousal — this is the word's dominant popular sense in Brazilian Portuguese, even though it also has an archaic literal "stiffness" sense
+mongo   # ableist slur ("pessoa que apresenta alguma limitação mental ou cognitiva", tagged pejorative) — this is the word's primary popular usage despite two unrelated botanical/ornithological senses
+bicha   # in Brazilian Portuguese this word's dominant popular usage is a slur (tagged pejorative) and/or vulgar (genitalia, prostitution) despite unrelated senses (queue, worm) that are more common in European Portuguese

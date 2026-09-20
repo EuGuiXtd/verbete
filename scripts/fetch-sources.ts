@@ -27,14 +27,25 @@ const SOURCES: Source[] = [
     name: 'pt_br_50k.txt',
     url: 'https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/pt_br/pt_br_50k.txt',
   },
+  {
+    // Raw wiktextract JSONL for the Portuguese-language Wiktionary
+    // (Wikcionário, pt.wiktionary.org), gzip-compressed (~34 MB; ~330 MB
+    // uncompressed). Unlike kaikki's per-language "dictionary/<Language>"
+    // pages (which bundle every language's *English*-Wiktionary-described
+    // senses and whose processed-JSONL filename does churn between
+    // releases), this raw-data endpoint's URL is stable across kaikki
+    // releases — only its content updates. One object per line, all
+    // languages pt.wiktionary.org documents; scripts/build-dictionary.ts
+    // filters to `lang_code === 'pt'` itself. Used (Task 8, pulled forward
+    // from Task 21) as the authority for which words are genuine
+    // dictionary head-forms — noun/adjective/adverb/infinitive-verb
+    // entries that are not themselves a form-of/inflection entry — since
+    // VERO's own lemma structure turned out to be an unreliable proxy for
+    // that question. See data/SOURCES.md.
+    name: 'ptwiktionary.jsonl.gz',
+    url: 'https://kaikki.org/ptwiktionary/raw-wiktextract-data.jsonl.gz',
+  },
 ];
-
-// The kaikki / Wiktionary Portuguese-sense extract is not fetched by this
-// script: it is large, its filename changes with every kaikki release, and
-// it is only consumed by a later task (definitions), not this one. When
-// it's needed, download it manually from https://kaikki.org/ptwiktionary/
-// and save it at this path; see data/SOURCES.md for the manual step.
-const KAIKKI_PATH = `${RAW_DIR}/ptwiktionary.jsonl`;
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -66,17 +77,6 @@ async function main(): Promise<void> {
 
   for (const source of SOURCES) {
     await fetchSource(source);
-  }
-
-  if (await exists(KAIKKI_PATH)) {
-    console.log(`skip ptwiktionary.jsonl (already present)`);
-  } else {
-    console.log(
-      'skip ptwiktionary.jsonl: not fetched automatically (large, release filename ' +
-        'changes). Manual step: download the Portuguese-sense extract from ' +
-        'https://kaikki.org/ptwiktionary/ and save it as data/raw/ptwiktionary.jsonl. ' +
-        'See data/SOURCES.md for details. Not required for this task.',
-    );
   }
 }
 

@@ -81,32 +81,37 @@ MPL grant permits. No specific MPL version is asserted.
 
 The plan's spec guessed 8,000–15,000 guesses and 1,500–3,000 answers. Those were hypotheses;
 these are the measured numbers from actually running the pipeline in
-`scripts/build-dictionary.ts` against the raw sources above (affix-expanded via
-`hunspell-reader`, not `unmunch`).
+`scripts/build-dictionary.ts` against the raw sources (affix-expanded via `hunspell-reader`,
+not `unmunch`).
 
 - **Guess list: 18,216** five-letter comparison keys (normalized: accent-free, uppercase),
   after affix expansion, NFC length filtering, and dropping tokens that appear only capitalized
   in `pt_BR.dic` (the proper-noun/acronym heuristic — see NOTICE.md and the Task 8 report for the
   sample review of it). This overshoots the plan's 8k–15k estimate by about 20%. Before
-  concluding the five-letter filter needs tightening, note that VERO's full affix expansion
-  produces 19,603 raw five-letter alphabetic forms, of which only 1,387 are dropped as
-  capitalized-only — i.e. the overshoot is mostly real five-letter Portuguese words (heavily
-  inflected verb forms), not proper-noun leakage. See the Task 8 report for the full sample
-  review and the controller's call on whether this needs tightening further.
+  concluding the five-letter filter needs tightening, the controller confirmed the overshoot is
+  mostly real five-letter Portuguese words (VERO's full affix expansion produces 19,603 raw
+  five-letter alphabetic forms, of which only 1,387 are dropped as capitalized-only), accepted
+  18,216 as-is, and asked for no further tightening. Raw generated file: 30,653 bytes; **gzip -9:
+  18,155 bytes**.
 
-- **Answer list: BLOCKED below the 1,500-word `DAILY_POOL_SIZE` floor.** Restricting candidate
-  answers to genuine dictionary head-forms (a word equal to the literal, unmodified `word/flags`
-  line in `pt_BR.dic` — see the Task 8 report for why the naive `prefix === '' && suffix === ''`
-  signal hunspell-reader exposes is unreliable and had to be replaced) leaves 7,553 five-letter,
-  non-proper head-forms. Intersecting those against `pt_br_50k.txt` yields only **1,217–1,432**
-  candidates depending on exact-text vs. accent-insensitive matching — short of the 1,500 answers
-  `assertBuildInvariants` requires, and short even before the NOSUGGEST/blocklist/collision drops
-  in pipeline steps 7–8 are applied. This is a real ceiling of the two raw sources on hand, not a
-  tunable parameter (`ANSWER_TARGET` was already unconstraining at this size). Full analysis,
-  including a "carro"/"porta"/"livro"/"roupa" case study showing VERO omits standalone entries
-  for some extremely common nouns, is in the Task 8 report
-  (`.superpowers/sdd/2026-09-20-verbete/task-8-report.md`). No generated `answers.generated.ts`
-  is committed until the controller decides how to close this gap.
+- **Answer list: 1,655**, ranked by frequency, restricted to genuine head-forms per the
+  Portuguese Wiktionary (see below), NOSUGGEST/blocklist-filtered, collision-resolved — above
+  the 1,500-word `DAILY_POOL_SIZE` floor. Raw generated file: 19,928 bytes; **gzip -9: 6,609
+  bytes**.
+
+  This required a controller-ruled change mid-task: the first version of this pipeline used
+  VERO's own `.dic` structure to decide "is this a genuine head-form (not a conjugation or
+  plural)," which produced only 1,217–1,432 candidates — short of the 1,500 floor — because VERO
+  itself has no standalone entry for some very common nouns (`carro`, `porta`, `livro`, `roupa`
+  — verified empirically) and separately lists some plurals as literal head entries. The
+  controller ruled that the raw Portuguese Wiktionary extract (`ptwiktionary.jsonl.gz`, pulled
+  forward from Task 21) becomes the head-form authority instead: a word is answer-eligible iff
+  Wiktionary has a matching entry whose part of speech is noun/adjective/adverb/verb and which
+  is not itself a form-of/inflection entry. This fixed the volume problem (`carro`-class nouns
+  have real Wiktionary entries) and, as a side effect, gave a much stronger, machine-checkable
+  signal against proper nouns and plurals than the capitalization heuristic alone. Full pipeline,
+  evidence, and honest sample reviews (three of them) are in the Task 8 report
+  (`.superpowers/sdd/2026-09-20-verbete/task-8-report.md`).
 
 ## Frequency word list (`pt_br_50k.txt`)
 
@@ -131,24 +136,43 @@ these are the measured numbers from actually running the pipeline in
   choices informed by this data (which five-letter words made the answer list), not the
   frequency data or ranking itself.
 
-## Wiktionary / kaikki definitions extract (`ptwiktionary.jsonl`) — not fetched in this task
+## Wiktionary / kaikki raw extract (`ptwiktionary.jsonl.gz`)
 
-- **Name:** kaikki.org Portuguese Wiktionary (Wikcionário) machine-readable extract
-- **Source page:** `https://kaikki.org/ptwiktionary/` (release filename changes with every
-  kaikki export; not recorded here as fetching it is out of scope for this task — see below)
+- **Name:** kaikki.org raw wiktextract data for the Portuguese Wiktionary (Wikcionário,
+  pt.wiktionary.org)
+- **URL:** `https://kaikki.org/ptwiktionary/raw-wiktextract-data.jsonl.gz` — this specific
+  endpoint's URL is stable across kaikki releases (only its content updates over time); it is
+  distinct from kaikki's per-language `dictionary/<Language>/` pages, which bundle every
+  language's *English*-Wiktionary-described senses under a processed-JSONL filename that does
+  churn between releases, and from the deprecated `kaikki.org-dictionary-Portuguese.jsonl`
+  (539.6 MB) mirror of that different, larger dataset — neither of those is what this project
+  fetches.
+- **Format:** gzip-compressed JSONL (one JSON object per line), every language pt.wiktionary.org
+  documents senses for — `scripts/build-dictionary.ts` filters to `lang_code === "pt"` itself.
+- **Download date:** 2026-09-20. **Upstream dump date:** 2026-09-01 (kaikki's own extraction of
+  that dump ran 2026-09-19, per the kaikki page).
+- **Measured size:** 35,583,192 bytes (~33.9 MB) gzip-compressed; ~331.9 MB uncompressed
+  (kaikki-reported; not independently decompressed-and-measured here — `build-dictionary.ts`
+  streams the gunzip rather than writing an uncompressed copy to disk).
 - **Licence:** Wiktionary content is **CC BY-SA 4.0** (Wikcionário's stated licence); kaikki's
   extraction tooling does not change the licence of the underlying Wiktionary text.
-- **Used for:** definitions shown in the finished game (Task 21 — word definitions, not word
-  validity or scoring).
-- **Redistribution status:** definitions derived from this data, once added, will be
-  **redistributed** as `data/definicoes.json` (added in Task 21). This is why the CC BY-SA 4.0
-  attribution block for it is written into `NOTICE.md` now, ahead of that file existing.
-- **Manual step required:** this file is large and its filename changes with each kaikki
-  release, so `scripts/fetch-sources.ts` does not fetch it automatically. It checks for
-  `data/raw/ptwiktionary.jsonl` and, if absent, prints a message naming this manual step instead
-  of failing. To acquire it: visit `https://kaikki.org/ptwiktionary/`, download the current
-  Portuguese-sense JSONL extract, and save it at `data/raw/ptwiktionary.jsonl`. Record the exact
-  filename and date actually used in this section when that step is done.
+- **Used for (Task 8, pulled forward from Task 21 by controller ruling):** the head-form
+  authority for candidate answers — a word is answer-eligible only if this extract has a
+  matching Portuguese entry whose part of speech is noun/adjective/adverb/verb and which is not
+  itself a form-of/inflection entry (see the Task 8 report). **Also used for (Task 21, not yet
+  implemented):** word definitions shown in the finished game.
+- **Redistribution status for this task (Task 8): BUILD-TIME ONLY, NEVER REDISTRIBUTED.** Only
+  the *existence and part-of-speech* of a Wiktionary entry is used to decide list membership; no
+  Wiktionary text (glosses, examples, etc.) is copied into `answers.generated.ts` — it holds only
+  the word strings themselves. This is the same build-time-only treatment as `pt_br_50k.txt`
+  below. **This changes in Task 21**, when `data/definicoes.json` is added: that file *will*
+  redistribute actual Wiktionary sense text and carry the CC BY-SA 4.0 obligation `NOTICE.md`
+  already documents for it.
+- **Fetched automatically:** `scripts/fetch-sources.ts` downloads this file like the other three
+  raw sources (idempotent — skipped if already present). The original plan expected this file to
+  need a manual download step because kaikki's *processed* per-language JSONL filenames churn
+  between releases; that concern turned out not to apply to this specific raw-data endpoint,
+  whose URL is stable.
 
 ## Summary table
 
@@ -156,7 +180,7 @@ these are the measured numbers from actually running the pipeline in
 |---|---|---|
 | `pt_BR.dic` / `pt_BR.aff` (VERO) | Yes — generated word lists ship in the bundle | LGPL-3.0, additionally MPL to the extent upstream's unversioned grant permits (see "Licence" above — ambiguous upstream, four disagreeing downstream readings) |
 | `pt_br_50k.txt` (FrequencyWords) | No — build-time ranking input only | CC BY-SA 4.0 (content), per upstream README |
-| `ptwiktionary.jsonl` (kaikki/Wiktionary) | Will be, once added in Task 21 (`data/definicoes.json`) | CC BY-SA 4.0 (Wikcionário) |
+| `ptwiktionary.jsonl.gz` (kaikki/Wiktionary) | No for Task 8 (build-time head-form check only); will be, once Task 21 adds `data/definicoes.json` | CC BY-SA 4.0 (Wikcionário) |
 
 ## Unresolved
 
