@@ -1,5 +1,6 @@
 import { useContext } from 'react';
 import type { MatchState } from '../engine/match';
+import type { Mode, Variant } from '../engine/types';
 import { MatchContext } from './MatchProvider';
 import type { ToastMessage } from './MatchProvider';
 
@@ -15,6 +16,12 @@ export interface UseMatchResult {
   readonly dismissToast: (id: number) => void;
   /** For Board's active-row shake. See MatchContextValue's doc comment. */
   readonly shakeToken: number;
+  /** For ModeTabs: which of the six variant x mode matches is on screen. */
+  readonly active: { readonly variant: Variant; readonly mode: Mode };
+  readonly selectMode: (variant: Variant, mode: Mode) => void;
+  readonly dailyNumber: number | null;
+  readonly dailyRolloverPending: boolean;
+  readonly applyDailyRollover: () => void;
 }
 
 /**
