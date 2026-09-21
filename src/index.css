@@ -205,10 +205,29 @@
    * coincidence of the current theme's token magnitudes, not a guarantee
    * — it measured under 1.3:1 against every scored band in dark mode. See
    * the task-17 fix report for the numbers.
+   *
+   * `background-clip: text` scales the gradient to THIS ELEMENT's own box
+   * — not the button's, not the bands'. This element must therefore be
+   * sized to exactly the same box `.tecla-multipla-fundo` occupies
+   * (`position: absolute; inset: 0`, the full button interior), or the
+   * gradient's 0–100% coordinate space silently stops matching the bands'
+   * 0–100% coordinate space. A first version of this rule instead let the
+   * span shrink-wrap the glyph and centred it via the button's own
+   * `place-items: center` — the gradient then painted across an ~11px
+   * glyph box inside a 44px button, so its quarters lined up with the
+   * bands only by coincidence, and did not for boardCount 4 (measured:
+   * the quarter meant for band 0 landed over band 1's real background at
+   * ≈1.0:1). Matching this box to `.tecla-multipla-fundo`'s box exactly
+   * is what makes the two coordinate spaces the same one, for any glyph
+   * width and any board count — see the task-17 fix report for the
+   * rendered measurements.
    */
   .tecla-multipla-letra {
-    position: relative;
+    position: absolute;
+    inset: 0;
     z-index: 1;
+    display: grid;
+    place-items: center;
     color: transparent;
     background-clip: text;
     -webkit-background-clip: text;
