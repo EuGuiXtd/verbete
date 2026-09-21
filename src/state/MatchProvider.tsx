@@ -113,6 +113,15 @@ function currentDailyAnswers(variant: Variant, dayKey: string): { answers: reado
   return { answers, hash: computeAnswersHash(answers) };
 }
 
+/**
+ * The key `useReveal`'s per-match gates are stored under — see that hook's
+ * own doc comment for why a single shared gate is not good enough once six
+ * matches (every variant x mode combination) exist behind one MatchProvider.
+ */
+function matchKey(active: { readonly variant: Variant; readonly mode: Mode }): string {
+  return `${active.variant}:${active.mode}`;
+}
+
 /** Matches exactly `WORD_LENGTH` uppercase A–Z letters — the one shape replay depends on. */
 const GUESS_PATTERN = new RegExp(`^[A-Z]{${String(WORD_LENGTH)}}$`);
 
@@ -550,7 +559,12 @@ export function MatchProvider({ children }: MatchProviderProps) {
           setShakeToken((n) => n + 1);
           break;
         case 'ACCEPTED':
-          reveal.start();
+          // Keyed to the match that actually accepted the guess. `slice.active`
+          // is correct here (not `latestRef`): every effect in this queue was
+          // produced by a MATCH_ACTION dispatched against `slice.active` at
+          // the time, and this effect drain always runs against the same
+          // `slice` snapshot that produced it (see this useEffect's deps).
+          reveal.start(matchKey(slice.active));
           // A new row becomes active; that row has never been rejected yet.
           setShakeToken(0);
           break;
@@ -603,7 +617,14 @@ export function MatchProvider({ children }: MatchProviderProps) {
     // instant it is dispatched, but the row is still mid-animation on
     // screen — a fast typist submitting here would be submitting into a
     // half-revealed row.
-    if (reveal.isRevealing) return;
+    //
+    // `latestRef` (not `slice.active` closed over directly), same reason as
+    // `flushActiveProgress` above: this callback's identity only changes
+    // when `reveal.isRevealing` itself changes, so it must read whichever
+    // match is active AT CALL TIME, not whichever was active when it was
+    // last recreated. Reading the wrong (stale) key here is exactly how a
+    // reveal on the match you just left could gate the one you switched to.
+    if (reveal.isRevealing(matchKey(latestRef.current.active))) return;
     dispatchProvider({ type: 'MATCH_ACTION', action: { type: 'SUBMIT' } });
   }, [reveal.isRevealing]);
 
@@ -636,11 +657,16 @@ export function MatchProvider({ children }: MatchProviderProps) {
   const dailyNumber = activeMatch.dayKey !== null ? computeDailyNumber(activeMatch.dayKey) : null;
   const dailyRolloverPending =
     slice.active.mode === 'diario' && slice.pendingDaily[slice.active.variant] !== null;
+  // The public `isRevealing` stays a plain boolean — always the CURRENTLY
+  // active match's own gate, never another one's. `useReveal`'s keying by
+  // match is an internal detail of this provider; nothing outside it needs
+  // to know a key even exists.
+  const isRevealingActive = reveal.isRevealing(matchKey(slice.active));
 
   const value = useMemo<MatchContextValue>(
     () => ({
       state: activeMatch,
-      isRevealing: reveal.isRevealing,
+      isRevealing: isRevealingActive,
       toasts,
       shakeToken,
       dismissToast,
@@ -656,7 +682,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
     }),
     [
       activeMatch,
-      reveal.isRevealing,
+      isRevealingActive,
       toasts,
       shakeToken,
       dismissToast,

@@ -15,6 +15,8 @@ export interface BoardProps {
    * CSS shake animation replay even for two identical rejections in a row.
    */
   readonly shakeToken?: number;
+  /** Threaded straight through to every Row — see Row's own doc comment. */
+  readonly compact?: boolean;
 }
 
 function emptyCells(): RowCell[] {
@@ -40,7 +42,7 @@ function draftCells(draft: string): RowCell[] {
  * draft row, no empty padding up to `maxAttempts`. That is the whole
  * freeze; there is no separate branch for it.
  */
-export function Board({ state, boardIndex, shakeToken = 0 }: BoardProps) {
+export function Board({ state, boardIndex, shakeToken = 0, compact = false }: BoardProps) {
   const board = state.boards[boardIndex];
   if (!board) return null;
 
@@ -63,11 +65,16 @@ export function Board({ state, boardIndex, shakeToken = 0 }: BoardProps) {
     }
   }
 
+  const wrapperClass = solved
+    ? compact
+      ? 'flex w-full flex-col gap-1 opacity-60 pointer-events-none'
+      : 'flex w-full flex-col gap-2 opacity-60 pointer-events-none'
+    : compact
+      ? 'flex w-full flex-col gap-1'
+      : 'flex w-full flex-col gap-2';
+
   return (
-    <div
-      className={solved ? 'flex w-full flex-col gap-2 opacity-60 pointer-events-none' : 'flex w-full flex-col gap-2'}
-      aria-disabled={solved ? true : undefined}
-    >
+    <div className={wrapperClass} aria-disabled={solved ? true : undefined}>
       {rowCells.map((cells, index) => {
         const isActive = index === activeIndex;
         const shaking = isActive && shakeToken > 0;
@@ -76,6 +83,7 @@ export function Board({ state, boardIndex, shakeToken = 0 }: BoardProps) {
             key={shaking ? `active-shake-${String(shakeToken)}` : index}
             cells={cells}
             shake={shaking}
+            compact={compact}
           />
         );
       })}

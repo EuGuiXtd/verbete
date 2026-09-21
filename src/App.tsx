@@ -2,7 +2,7 @@ import { keyboardStates } from './engine/keyboard';
 import { MatchProvider } from './state/MatchProvider';
 import { useMatch } from './state/useMatch';
 import { usePhysicalKeyboard } from './state/usePhysicalKeyboard';
-import { Board } from './ui/board/Board';
+import { BoardGrid } from './ui/board/BoardGrid';
 import { blurOnMouseActivation } from './ui/blurOnMouseActivation';
 import { ToastHost } from './ui/feedback/ToastHost';
 import { Header } from './ui/layout/Header';
@@ -57,13 +57,15 @@ function GameScreen() {
         <>
           {/* Positioned against Shell's <main>, not the viewport — see ToastHost.tsx. */}
           <ToastHost toasts={toasts} onDismiss={dismissToast} />
-          <div className="flex w-full max-w-sm flex-col items-center gap-6">
+          {/*
+            No `max-w-sm` here any more: BoardGrid.tsx owns its own width per
+            `state.boards.length` (Solo stays at `max-w-sm`; Dueto and
+            Quarteto need more room than that to lay two or four boards out
+            side by side — see BoardGrid's own doc comment).
+          */}
+          <div className="flex w-full flex-col items-center gap-6">
             <DailyRolloverBanner />
-            <div className="flex w-full flex-col gap-6">
-              {state.boards.map((_board, index) => (
-                <Board key={index} state={state} boardIndex={index} shakeToken={shakeToken} />
-              ))}
-            </div>
+            <BoardGrid state={state} shakeToken={shakeToken} />
           </div>
           {/*
             Task 21: the end-of-match reveal. Renders nothing while

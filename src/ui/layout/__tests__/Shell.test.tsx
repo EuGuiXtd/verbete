@@ -38,4 +38,32 @@ describe('Shell', () => {
     expect(root.className).toContain('h-svh');
     expect(root.className).not.toMatch(/\bh-screen\b/);
   });
+
+  it('never centers `main` itself — only its inner min-h-full wrapper — so tall content (Quarteto) stays scrollable to its own top', () => {
+    // jsdom performs no layout, so this cannot measure the actual overflow
+    // bug (see Shell.tsx's own doc comment); it only pins down the DOM
+    // shape the fix depends on, so a regression that moves justify-center
+    // back onto `main` fails here instead of only in a real browser.
+    render(
+      <Shell
+        header={null}
+        board={<div data-testid="board">tabuleiros</div>}
+        keyboard={null}
+      />,
+    );
+
+    const main = document.querySelector('main');
+    if (main === null) throw new Error('expected a <main> element');
+    expect(main.className).not.toMatch(/\bjustify-center\b/);
+    expect(main.className).not.toMatch(/\bitems-center\b/);
+
+    const board = screen.getByTestId('board');
+    const anchor = board.closest('.grid-anchor');
+    if (anchor === null) throw new Error('expected board to be wrapped in .grid-anchor');
+    expect(anchor.className).toMatch(/\bmin-h-full\b/);
+    expect(anchor.className).toMatch(/\bjustify-center\b/);
+    // The anchor must actually live inside `main` for `min-h-full` (100%
+    // of `main`'s own height) to resolve against the right box.
+    expect(main.contains(anchor)).toBe(true);
+  });
 });

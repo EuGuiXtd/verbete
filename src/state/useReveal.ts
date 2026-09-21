@@ -36,11 +36,11 @@ export function revealGateDurationMs(): number {
   return (reveal * (WORD_LENGTH - 1)) / WORD_LENGTH + press;
 }
 
-export interface RevealGate {
-  /** True for the duration of one reveal, starting from the last start(). */
-  readonly isRevealing: boolean;
-  /** Raise the gate. Call once per ACCEPTED effect. */
-  readonly start: () => void;
+export interface RevealGates {
+  /** True for the duration of one reveal on `key`, starting from that key's last start(). */
+  readonly isRevealing: (key: string) => boolean;
+  /** Raise `key`'s gate. Call once per ACCEPTED effect on that key's match. */
+  readonly start: (key: string) => void;
 }
 
 /**
@@ -52,26 +52,48 @@ export interface RevealGate {
  * half-revealed row. If this gate lived in the engine instead, every
  * reducer test would become asynchronous, and the engine's own purity
  * gates (no timers, no host clock) would reject it outright.
+ *
+ * Keyed, not a single boolean: `MatchProvider` owns six matches at once
+ * (every variant x mode combination) behind ONE call to this hook. Task 23
+ * found the practical consequence of an earlier, single-gate version of
+ * this hook: submitting a guess in one match, then switching tabs before
+ * its ~300ms reveal finished, left the NEWLY active match's own "enviar"
+ * transiently dead — blocked by an animation on a board that tab was never
+ * even showing. Every key here (`"<variant>:<mode>"`, see MatchProvider's
+ * `matchKey`) gets its own timer and its own slot in `revealingKeys`, so
+ * one match's reveal can never gate, extend or clear another's.
  */
-export function useReveal(): RevealGate {
-  const [isRevealing, setIsRevealing] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+export function useReveal(): RevealGates {
+  const [revealingKeys, setRevealingKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const timeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   useEffect(
     () => () => {
-      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+      for (const timeout of timeoutsRef.current.values()) clearTimeout(timeout);
+      timeoutsRef.current.clear();
     },
     [],
   );
 
-  const start = useCallback(() => {
-    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
-    setIsRevealing(true);
-    timeoutRef.current = setTimeout(() => {
-      timeoutRef.current = null;
-      setIsRevealing(false);
+  const start = useCallback((key: string) => {
+    const existing = timeoutsRef.current.get(key);
+    if (existing !== undefined) clearTimeout(existing);
+
+    setRevealingKeys((current) => (current.has(key) ? current : new Set(current).add(key)));
+
+    const timeout = setTimeout(() => {
+      timeoutsRef.current.delete(key);
+      setRevealingKeys((current) => {
+        if (!current.has(key)) return current;
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
     }, revealGateDurationMs());
+    timeoutsRef.current.set(key, timeout);
   }, []);
+
+  const isRevealing = useCallback((key: string) => revealingKeys.has(key), [revealingKeys]);
 
   return { isRevealing, start };
 }

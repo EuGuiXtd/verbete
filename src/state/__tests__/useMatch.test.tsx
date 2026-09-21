@@ -151,6 +151,35 @@ describe('useMatch', () => {
     expect(result.current.state.guesses).toEqual(['TERRA', 'PRATO']); // now it goes through
   });
 
+  it('does not gate submission on a newly active match while a different match is still revealing (Task 23: the reveal gate is per-match, not shared)', () => {
+    const { result } = renderHook(() => useMatch(), { wrapper });
+
+    // Solo/infinito accepts a guess and opens ITS OWN reveal gate.
+    typeWord(result, 'TERRA');
+    act(() => {
+      result.current.submit();
+    });
+    expect(result.current.isRevealing).toBe(true);
+
+    // Switch to a different match — dueto/infinito, never touched before —
+    // before Solo's ~100ms gate has cleared.
+    act(() => {
+      result.current.selectMode('dueto', 'infinito');
+    });
+    // The newly active match has never revealed anything: its own gate must
+    // read closed, not inherit Solo's still-open one.
+    expect(result.current.isRevealing).toBe(false);
+
+    // And it must actually be usable, not just report itself as open: a
+    // valid guess on THIS match goes through immediately, with no need to
+    // wait out Solo's timer.
+    typeWord(result, 'CASAL');
+    act(() => {
+      result.current.submit();
+    });
+    expect(result.current.state.guesses).toEqual(['CASAL']);
+  });
+
   it('wins the match on the correct guess and finishes', () => {
     const { result } = renderHook(() => useMatch(), { wrapper });
 

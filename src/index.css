@@ -333,6 +333,20 @@
     margin-bottom: 1.5rem;
     border-top: 1px solid var(--rule);
   }
+
+  /*
+   * Quarteto's 2x2 grid (see BoardGrid.tsx): four boards of nine rows have
+   * to fit inside 100svh even on an iPhone SE, side by side two at a time —
+   * a genuine width squeeze the single-board --text-tile clamp (tuned for
+   * one board spanning the whole content width) was never sized for.
+   * Scoped to just this subtree, the same "override a token on an
+   * ancestor" trick tokens.css already uses at :root for light/dark, just
+   * one level down instead of the whole page — Row.tsx and Tile.tsx never
+   * know this class exists, they only ever read var(--text-tile).
+   */
+  .grade-compacta {
+    --text-tile: clamp(0.8125rem, 4vw, 1.25rem);
+  }
 }
 
 /*

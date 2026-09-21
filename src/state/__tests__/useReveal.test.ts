@@ -48,32 +48,40 @@ describe('revealGateDurationMs', () => {
   });
 });
 
+/**
+ * `useReveal` is a single instance shared by `MatchProvider` across all six
+ * variant x mode matches (see that file), so every test here exercises the
+ * keyed API against at least two keys — a suite that only ever called
+ * `start('solo')` could pass with a single shared boolean underneath and
+ * would never catch the cross-match bleed these tests exist to rule out.
+ */
 describe('useReveal', () => {
-  it('starts closed', () => {
+  it('starts with every key closed', () => {
     const { result } = renderHook(() => useReveal());
-    expect(result.current.isRevealing).toBe(false);
+    expect(result.current.isRevealing('solo:diario')).toBe(false);
+    expect(result.current.isRevealing('quarteto:infinito')).toBe(false);
   });
 
-  it('opens the gate on start() and closes it again after exactly the derived duration', () => {
+  it('opens one key on start() and closes it again after exactly the derived duration', () => {
     setToken('--reveal-duration', '320ms');
     setToken('--press-duration', '140ms');
     const duration = revealGateDurationMs();
 
     const { result } = renderHook(() => useReveal());
     act(() => {
-      result.current.start();
+      result.current.start('solo:diario');
     });
-    expect(result.current.isRevealing).toBe(true);
+    expect(result.current.isRevealing('solo:diario')).toBe(true);
 
     act(() => {
       vi.advanceTimersByTime(duration - 1);
     });
-    expect(result.current.isRevealing).toBe(true);
+    expect(result.current.isRevealing('solo:diario')).toBe(true);
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(result.current.isRevealing).toBe(false);
+    expect(result.current.isRevealing('solo:diario')).toBe(false);
   });
 
   it('closes immediately when the tokens have collapsed to zero under reduced motion', () => {
@@ -82,31 +90,59 @@ describe('useReveal', () => {
 
     const { result } = renderHook(() => useReveal());
     act(() => {
-      result.current.start();
+      result.current.start('solo:diario');
     });
     act(() => {
       vi.advanceTimersByTime(0);
     });
-    expect(result.current.isRevealing).toBe(false);
+    expect(result.current.isRevealing('solo:diario')).toBe(false);
   });
 
-  it('restarts the timer if start() is called again before the gate closes', () => {
+  it('restarts the timer for that key if start() is called again before its gate closes', () => {
     setToken('--reveal-duration', '100ms');
     setToken('--press-duration', '0ms');
 
     const { result } = renderHook(() => useReveal());
     act(() => {
-      result.current.start();
+      result.current.start('solo:diario');
     });
     act(() => {
       vi.advanceTimersByTime(90);
     });
     act(() => {
-      result.current.start(); // a second ACCEPTED before the first gate closed
+      result.current.start('solo:diario'); // a second ACCEPTED before the first gate closed
     });
     act(() => {
       vi.advanceTimersByTime(15); // 105ms since the very first start(), but only 15 since the second
     });
-    expect(result.current.isRevealing).toBe(true);
+    expect(result.current.isRevealing('solo:diario')).toBe(true);
+  });
+
+  it('keeps two keys fully independent: starting one never opens, extends or is closed by the other', () => {
+    setToken('--reveal-duration', '100ms');
+    setToken('--press-duration', '0ms');
+
+    const { result } = renderHook(() => useReveal());
+    act(() => {
+      result.current.start('quarteto:diario');
+    });
+    expect(result.current.isRevealing('quarteto:diario')).toBe(true);
+    // The exact bug this task's brief calls out: switching tabs mid-reveal
+    // must not transiently block submission on the newly active match.
+    expect(result.current.isRevealing('solo:infinito')).toBe(false);
+
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(result.current.isRevealing('quarteto:diario')).toBe(false);
+    expect(result.current.isRevealing('solo:infinito')).toBe(false);
+
+    // Now open the second key and confirm the first (already closed) stays
+    // closed — one key's lifecycle must never resurrect another's.
+    act(() => {
+      result.current.start('solo:infinito');
+    });
+    expect(result.current.isRevealing('solo:infinito')).toBe(true);
+    expect(result.current.isRevealing('quarteto:diario')).toBe(false);
   });
 });
