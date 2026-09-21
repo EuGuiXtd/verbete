@@ -46,10 +46,16 @@ export function Header() {
     <header className="flex shrink-0 items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-6">
       <Wordmark />
       <div className="flex items-center gap-1">
-        <button type="button" className="tecla px-3" aria-label="Ajuda">
+        {/*
+          `disabled`: these have no modal to open yet (Task 22's
+          HelpModal/StatsModal). Without it a press is silent — reads as
+          broken, not as "not built yet" — and a screen reader announces
+          them as ordinary, actionable buttons that do nothing.
+        */}
+        <button type="button" className="tecla px-3" aria-label="Ajuda" disabled>
           ?
         </button>
-        <button type="button" className="tecla px-3" aria-label="Estatísticas">
+        <button type="button" className="tecla px-3" aria-label="Estatísticas" disabled>
           #
         </button>
         <button

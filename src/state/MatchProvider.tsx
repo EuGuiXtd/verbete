@@ -1,4 +1,4 @@
-import { createContext, useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { createMatch, reduce } from '../engine/match';
 import type { Action, Effect, InvalidReason, MatchState } from '../engine/match';
 import { isValidGuess, pickRandomAnswer } from '../data/dictionary';
@@ -60,6 +60,72 @@ function createSoloMatch(exclude: ReadonlySet<string>): MatchState {
   });
 }
 
+/**
+ * The match plus whatever engine effects it has produced that the UI has
+ * not turned into a toast/shake/reveal yet. `pendingEffects` is a queue,
+ * not a snapshot: it accumulates rather than replaces, and the useEffect
+ * below drains it after every render that finds it non-empty.
+ */
+interface Slice {
+  readonly match: MatchState;
+  readonly pendingEffects: readonly Effect[];
+}
+
+type ProviderAction =
+  | { type: 'MATCH_ACTION'; action: Action }
+  | { type: 'NEW_MATCH' }
+  | { type: 'EFFECTS_FLUSHED' };
+
+/**
+ * Pure — reads no clock, no storage, calls no setter. Every write to the
+ * match goes through this one function, and `useReducer`'s contract is what
+ * makes that safe under a fast typist: React guarantees this reducer is
+ * called with the true, up-to-date `Slice` for every queued action, in
+ * order, even when several dispatches land in the same synchronous browser
+ * task with no render in between. That is the property a hand-synced ref
+ * cannot give you — see git history on this file for the bug that shipped
+ * without it (dispatching 'C' then 'A' in one task produced a draft of
+ * "A", not "CA", because both dispatches read the same stale snapshot).
+ * There is no second write path left to reintroduce that race: Task 19's
+ * daily mode and Task 20's restore-from-storage both have to come through
+ * `NEW_MATCH` or a new `ProviderAction` variant, and either way they get
+ * this same guarantee for free, by construction, not by convention.
+ *
+ * `NEW_MATCH` reads `slice.match` for its exclude set for the same reason
+ * `MATCH_ACTION` reads `slice.match` for `reduce`'s previous state: because
+ * it is the argument React hands this function, never a value read from
+ * outside it.
+ *
+ * Effects accumulate (`[...slice.pendingEffects, ...effects]`), never
+ * replace: two dispatches batched into the same render must not let the
+ * first one's toast/shake get silently dropped by the second's. Only
+ * `EFFECTS_FLUSHED` — dispatched from the consuming `useEffect`, once per
+ * render that has any — drains the queue back to empty.
+ */
+function providerReducer(slice: Slice, action: ProviderAction): Slice {
+  switch (action.type) {
+    case 'MATCH_ACTION': {
+      const { state, effects } = reduce(slice.match, action.action, { isValidGuess, now: Date.now });
+      if (state === slice.match && effects.length === 0) return slice;
+      return {
+        match: state,
+        pendingEffects: effects.length === 0 ? slice.pendingEffects : [...slice.pendingEffects, ...effects],
+      };
+    }
+    case 'NEW_MATCH':
+      return {
+        match: createSoloMatch(new Set(slice.match.boards.map((board) => board.answer))),
+        pendingEffects: [],
+      };
+    case 'EFFECTS_FLUSHED':
+      return slice.pendingEffects.length === 0 ? slice : { ...slice, pendingEffects: [] };
+  }
+}
+
+function initSlice(): Slice {
+  return { match: createSoloMatch(new Set()), pendingEffects: [] };
+}
+
 export interface MatchProviderProps {
   readonly children: ReactNode;
 }
@@ -73,20 +139,7 @@ export interface MatchProviderProps {
  * frozen/solved presentation from them.
  */
 export function MatchProvider({ children }: MatchProviderProps) {
-  const [state, setState] = useState<MatchState>(() => createSoloMatch(new Set()));
-  // The authoritative "current state" `dispatch` reads, kept in sync
-  // EAGERLY (assigned the instant a new state is computed, inside dispatch
-  // and newMatch below) rather than only from the render body. Multiple
-  // native keydown events can reach usePhysicalKeyboard's listener — and
-  // therefore call `type`/`submit` — back to back inside the same browser
-  // task, with no React render in between to refresh a render-time-only
-  // ref. A ref synced only at render time would then feed every dispatch
-  // in that burst the SAME stale snapshot, silently dropping all but the
-  // last keystroke (verified by hand: dispatching 'C' then 'A' synchronously
-  // produced a draft of "A", not "CA", before this fix). Eagerly assigning
-  // it right after computing each new state closes that gap.
-  const stateRef = useRef(state);
-
+  const [slice, dispatchProvider] = useReducer(providerReducer, undefined, initSlice);
   const [toasts, setToasts] = useState<readonly ToastMessage[]>([]);
   const [shakeToken, setShakeToken] = useState(0);
   const reveal = useReveal();
@@ -95,42 +148,41 @@ export function MatchProvider({ children }: MatchProviderProps) {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
-  const applyEffects = useCallback(
-    (effects: readonly Effect[]) => {
-      for (const effect of effects) {
-        switch (effect.type) {
-          case 'REJECTED':
-            setToasts((current) => [...current, { id: nextToastId(), text: REJECTION_MESSAGE[effect.reason] }]);
-            setShakeToken((n) => n + 1);
-            break;
-          case 'ACCEPTED':
-            reveal.start();
-            // A new row becomes active; that row has never been rejected yet.
-            setShakeToken(0);
-            break;
-          case 'BOARD_SOLVED':
-          case 'FINISHED':
-            // Already encoded in `state` (solvedAt / status). Later tasks
-            // (result modal, stats) hook these; Task 18 has neither.
-            break;
-        }
+  // The one place side effects actually happen — deliberately not inside
+  // `providerReducer`, which stays pure. Runs once per render that finds a
+  // non-empty queue, in order, regardless of how many dispatches produced
+  // it, then drains the queue it just processed.
+  useEffect(() => {
+    if (slice.pendingEffects.length === 0) return;
+    for (const effect of slice.pendingEffects) {
+      switch (effect.type) {
+        case 'REJECTED':
+          setToasts((current) => [...current, { id: nextToastId(), text: REJECTION_MESSAGE[effect.reason] }]);
+          setShakeToken((n) => n + 1);
+          break;
+        case 'ACCEPTED':
+          reveal.start();
+          // A new row becomes active; that row has never been rejected yet.
+          setShakeToken(0);
+          break;
+        case 'BOARD_SOLVED':
+        case 'FINISHED':
+          // Already encoded in `slice.match` (solvedAt / status). Later
+          // tasks (result modal, stats) hook these; Task 18 has neither.
+          break;
       }
-    },
-    [reveal],
-  );
+    }
+    dispatchProvider({ type: 'EFFECTS_FLUSHED' });
+  }, [slice.pendingEffects, reveal]);
 
-  const dispatch = useCallback(
-    (action: Action) => {
-      const { state: next, effects } = reduce(stateRef.current, action, { isValidGuess, now: Date.now });
-      stateRef.current = next; // eager: see the doc comment on stateRef above
-      setState(next);
-      if (effects.length > 0) applyEffects(effects);
-    },
-    [applyEffects],
+  const type = useCallback(
+    (letter: string) => dispatchProvider({ type: 'MATCH_ACTION', action: { type: 'TYPE', letter } }),
+    [],
   );
-
-  const type = useCallback((letter: string) => dispatch({ type: 'TYPE', letter }), [dispatch]);
-  const backspace = useCallback(() => dispatch({ type: 'BACKSPACE' }), [dispatch]);
+  const backspace = useCallback(
+    () => dispatchProvider({ type: 'MATCH_ACTION', action: { type: 'BACKSPACE' } }),
+    [],
+  );
   const submit = useCallback(() => {
     // The reveal gate: belongs here, in the UI, not in the engine. The
     // reducer is synchronous and would happily score a second guess the
@@ -138,20 +190,18 @@ export function MatchProvider({ children }: MatchProviderProps) {
     // screen — a fast typist submitting here would be submitting into a
     // half-revealed row.
     if (reveal.isRevealing) return;
-    dispatch({ type: 'SUBMIT' });
-  }, [dispatch, reveal.isRevealing]);
+    dispatchProvider({ type: 'MATCH_ACTION', action: { type: 'SUBMIT' } });
+  }, [reveal.isRevealing]);
 
   const newMatch = useCallback(() => {
-    const next = createSoloMatch(new Set(stateRef.current.boards.map((board) => board.answer)));
-    stateRef.current = next; // eager: see the doc comment on stateRef above
-    setState(next);
+    dispatchProvider({ type: 'NEW_MATCH' });
     setToasts([]);
     setShakeToken(0);
   }, []);
 
   const value = useMemo<MatchContextValue>(
     () => ({
-      state,
+      state: slice.match,
       isRevealing: reveal.isRevealing,
       toasts,
       shakeToken,
@@ -161,7 +211,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
       submit,
       newMatch,
     }),
-    [state, reveal.isRevealing, toasts, shakeToken, dismissToast, type, backspace, submit, newMatch],
+    [slice.match, reveal.isRevealing, toasts, shakeToken, dismissToast, type, backspace, submit, newMatch],
   );
 
   return <MatchContext.Provider value={value}>{children}</MatchContext.Provider>;

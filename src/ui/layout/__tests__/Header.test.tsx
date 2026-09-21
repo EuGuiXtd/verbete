@@ -48,6 +48,17 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: /tema/i })).toBeDefined();
   });
 
+  it('marks Ajuda and Estatísticas disabled — no modal exists yet (Task 22), so a press must not go silent', () => {
+    render(<Header />);
+    const help = screen.getByRole('button', { name: /ajuda/i }) as HTMLButtonElement;
+    const stats = screen.getByRole('button', { name: /estatísticas/i }) as HTMLButtonElement;
+    const theme = screen.getByRole('button', { name: /tema/i }) as HTMLButtonElement;
+
+    expect(help.disabled).toBe(true);
+    expect(stats.disabled).toBe(true);
+    expect(theme.disabled).toBe(false);
+  });
+
   it('cycles the theme through the document attribute when its button is pressed', () => {
     render(<Header />);
     const themeButton = screen.getByRole('button', { name: /tema/i });
