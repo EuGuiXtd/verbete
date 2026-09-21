@@ -212,14 +212,14 @@ export function StatsModal({
 
       <div className="folha-regua" />
 
-      {/*
-        No `blurOnMouseActivation` here — same reason as HelpModal's "sobre
-        as fontes": this button's only job is to open HistoryModal, and it
-        needs to still be focused when that dialog mounts for Modal.tsx's
-        focus-restore to have a real target. See Modal.tsx's own doc
-        comment.
-      */}
-      <button type="button" className="text-small underline decoration-rule underline-offset-2" onClick={onOpenHistory}>
+      <button
+        type="button"
+        className="text-small underline decoration-rule underline-offset-2"
+        onClick={(event: MouseEvent<HTMLButtonElement>) => {
+          blurOnMouseActivation(event);
+          onOpenHistory();
+        }}
+      >
         ver histórico completo
       </button>
     </Modal>

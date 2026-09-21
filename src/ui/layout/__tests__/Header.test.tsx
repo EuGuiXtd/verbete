@@ -169,29 +169,36 @@ describe('Header', () => {
     expect(pressed('Infinito')).toBe('false');
   });
 
-  // Review round 2, finding 2: closing a modal opened by a real mouse click
-  // must return focus to the button that opened it, not leave it on
-  // whatever the browser defaults to (the document body). `userEvent.click`,
-  // not `fireEvent.click`, is what actually gives this test a real signal:
-  // `fireEvent.click` only dispatches a bare click event and never focuses
-  // anything (jsdom does not implement a browser's implicit
-  // click-focuses-the-button behaviour for it), so it would report success
-  // whether or not this fix existed. `userEvent.click` drives the full
-  // pointer/focus sequence a real click actually produces, including the
-  // non-zero `event.detail` `blurOnMouseActivation.ts` keys off — which is
-  // also why Header no longer calls it on this button (see Modal.tsx's own
-  // doc comment). e2e/header-modal-focus.spec.ts proves the same thing
-  // against a real browser, for the keyboard path this test doesn't cover.
-  it('returns focus to the Ajuda button after a mouse-clicked HelpModal closes', async () => {
+  // Review round 3 correction: round 2 first shipped this test asserting
+  // `document.activeElement` was back on the Ajuda button after a
+  // mouse-driven close — which required Header to stop calling
+  // `blurOnMouseActivation` on Ajuda, and that "fix" invented focus a mouse
+  // user never had, reopening the swallowed-Enter regression
+  // `blurOnMouseActivation` exists to prevent (see Modal.tsx's own doc
+  // comment for the full account). Round 3 restored the blur call, so this
+  // now asserts the opposite and correct thing: after a mouse click opens
+  // and a mouse click closes, NO button is left focused — Ajuda was blurred
+  // on its own click (`event.detail !== 0`), so `Modal` captured
+  // `document.body` (not an `HTMLElement`) as the "trigger", and restoring
+  // to it on close is a correct no-op. `userEvent.click`, not
+  // `fireEvent.click`, is what actually gives this test a real signal:
+  // `fireEvent.click` never focuses anything in jsdom, so it would report
+  // success regardless of whether `blurOnMouseActivation` ran at all.
+  // e2e/header-modal-focus.spec.ts proves the behavioural consequence (a
+  // bare Enter afterwards reaches the game, not the button) against a real
+  // browser; this is the jsdom-level check that no DOM focus was invented.
+  it('leaves no button focused after a mouse-clicked HelpModal closes', async () => {
     const user = userEvent.setup();
     render(<Header />, { wrapper });
     const helpButton = screen.getByRole('button', { name: /ajuda/i });
 
     await user.click(helpButton);
     expect(screen.getByRole('dialog')).toBeDefined();
+    // Blurred by its own click, exactly like every other chrome button.
+    expect(document.activeElement).not.toBe(helpButton);
 
     await user.click(screen.getByRole('button', { name: 'fechar' }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(document.activeElement).toBe(helpButton);
+    expect(document.activeElement).toBe(document.body);
   });
 });

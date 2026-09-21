@@ -51,27 +51,56 @@ test.describe('header modal focus', () => {
     await expect(ajudaButton).toBeFocused();
   });
 
-  // The keyboard-only test above cannot, by construction, prove the
-  // mouse-click half of finding 2: `blurOnMouseActivation` only ever fires
-  // for a real mouse click (`event.detail !== 0`), so a Tab+Enter open never
-  // loses focus from "Ajuda" in the first place — the restore-on-close
-  // logic has nothing to do there, and mutation-testing this task's report
-  // documents confirmed that spec alone stays green whether or not the
-  // restore fix exists at all. A genuine mouse click is what actually
-  // exercises it: Header no longer blurs Ajuda on click (see Modal.tsx's
-  // own doc comment), so Ajuda starts genuinely focused, "fechar" then
-  // blurs itself on its own click, and only the restore-on-unmount fix
-  // brings focus back to Ajuda afterwards.
-  test('a mouse-clicked Ajuda gets focus back after HelpModal closes', async ({ page }) => {
+  // The keyboard-only test above cannot, by construction, prove anything
+  // about the mouse path: `blurOnMouseActivation` only ever fires for a
+  // real mouse click (`event.detail !== 0`), so a Tab+Enter open never
+  // loses focus from "Ajuda" in the first place. A genuine mouse click is
+  // what actually exercises it.
+  //
+  // Round 2 of this task's review had this test assert
+  // `expect(ajudaButton).toBeFocused()` after closing — which passed, but
+  // for the wrong reason: it required removing `blurOnMouseActivation`
+  // from Ajuda so it would still be focused for `Modal` to capture, which
+  // in turn left a real button focused after a mouse-driven close. That
+  // "worked" for the assertion actually written, but a mouse player who
+  // then pressed a bare Enter (not a letter — see
+  // `usePhysicalKeyboard.ts`'s `isButtonOwnedActivationKey`) would have
+  // reopened the dialog instead of submitting a guess: the Task 20 bug,
+  // back through a different door.
+  //
+  // Round 3 restored `blurOnMouseActivation` on all four modal-opening
+  // buttons (see `Modal.tsx`'s own doc comment for why that costs nothing
+  // once focus-restore already exists) and this test's assertion changed
+  // to match: a mouse-opened, mouse-closed dialog leaves NO button
+  // focused — `document.activeElement` at mount time was already `body`,
+  // so the restore-on-close is a correct no-op — and the proof that
+  // matters is behavioural, not "what has DOM focus": a bare Enter right
+  // after closing must reach the game, not reopen Ajuda.
+  test('a mouse-clicked Ajuda leaves no button focused, so a bare Enter after closing does not reopen it', async ({
+    page,
+  }) => {
     await page.goto('/');
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
     const ajudaButton = page.getByRole('button', { name: 'Ajuda' });
     await ajudaButton.click();
-    await expect(page.getByRole('dialog')).toBeVisible();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
 
     await page.getByRole('button', { name: 'fechar' }).click();
-    await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(ajudaButton).toBeFocused();
+    await expect(dialog).toBeHidden();
+
+    // The regression round 2 introduced, made concrete: with the draft
+    // empty, a bare Enter that actually reaches the game produces a
+    // "Faltam letras" rejection toast (engine/match.ts's `too_short`,
+    // surfaced via MatchProvider's REJECTED effect) — proof this Enter was
+    // not instead swallowed by a still-focused "Ajuda" button re-clicking
+    // itself. If it had been swallowed, neither the toast nor this
+    // assertion's alternative (the dialog reopening) would leave the
+    // dialog visible — but reopening is the one that actually indicates a
+    // real regression, so that is what this checks first and foremost.
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('Faltam letras')).toBeVisible();
   });
 });

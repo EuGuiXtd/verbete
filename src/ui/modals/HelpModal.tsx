@@ -1,3 +1,5 @@
+import type { MouseEvent } from 'react';
+import { blurOnMouseActivation } from '../blurOnMouseActivation';
 import { Modal } from './Modal';
 
 export interface HelpModalProps {
@@ -60,16 +62,13 @@ export function HelpModal({ isOpen, onClose, onOpenAbout }: HelpModalProps) {
           reconhece normalmente.
         </p>
         <div className="folha-regua" />
-        {/*
-          No `blurOnMouseActivation` here — this button's only job is to
-          open AboutModal, and `Modal.tsx`'s focus-restore needs it to still
-          be genuinely focused when that dialog mounts. See Modal.tsx's own
-          doc comment for the trade-off this makes.
-        */}
         <button
           type="button"
           className="text-small text-ghost underline decoration-rule underline-offset-2"
-          onClick={onOpenAbout}
+          onClick={(event: MouseEvent<HTMLButtonElement>) => {
+            blurOnMouseActivation(event);
+            onOpenAbout();
+          }}
         >
           sobre as fontes das palavras e definições
         </button>

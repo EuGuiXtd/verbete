@@ -43,22 +43,42 @@ export interface ModalProps {
  *   entirely — see the "History/About close the whole stack" note in this
  *   task's report — or removed for some unrelated reason).
  *
- *   This restore only does anything useful if the trigger button is still
- *   genuinely focused at the moment this component mounts. `blurOnMouseActivation`
- *   would otherwise have already blurred it for a real mouse click, by the
- *   time this effect runs — which is why every button whose ONLY job is to
- *   open one of these four modals (`Header`'s Ajuda/Estatísticas,
- *   `HelpModal`'s "sobre as fontes", `StatsModal`'s "ver histórico
- *   completo") no longer calls `blurOnMouseActivation` at all. That trades
- *   away one guarantee for another: those specific buttons can now stay
- *   genuinely focused after a mouse click (needed for the restore to have a
- *   real target), which reopens the door `blurOnMouseActivation` exists
- *   codebase-wide to close — a still-focused button "owns" the next
- *   Enter/Space per `usePhysicalKeyboard.ts`'s `isButtonOwnedActivationKey`,
- *   so a player who closes a modal by mouse and immediately presses Enter
- *   (rather than typing a letter first) re-activates the trigger instead of
- *   submitting a guess. See this task's report for why that trade was made
- *   deliberately rather than silently.
+ *   Round 2 of this task's review first shipped this by having the four
+ *   modal-opening buttons (`Header`'s Ajuda/Estatísticas, `HelpModal`'s
+ *   "sobre as fontes", `StatsModal`'s "ver histórico completo") stop
+ *   calling `blurOnMouseActivation`, reasoning that the restore needed the
+ *   trigger to still be focused at mount time. Round 3 corrected that: it
+ *   was solving the wrong problem, and cost a real regression (see below).
+ *   Every one of those four buttons keeps calling `blurOnMouseActivation`,
+ *   exactly like every other chrome button in this app, and the
+ *   capture-and-restore above does the right thing on its own for both
+ *   input methods precisely BECAUSE of that call, not despite it:
+ *
+ *   - Mouse click: `blurOnMouseActivation` blurs the button before `Modal`
+ *     ever mounts (`event.detail !== 0`), so `document.activeElement` at
+ *     mount time is `document.body` — not an `HTMLElement`, so the
+ *     `instanceof HTMLElement` guard on the restore already skips it.
+ *     Restoring to "nothing" is a correct no-op: a mouse user never had
+ *     keyboard focus on that button to begin with, so there is nothing to
+ *     give back, and no button is left focused afterwards to swallow the
+ *     player's next Enter.
+ *   - Keyboard: `blurOnMouseActivation` is a no-op for a keyboard-
+ *     synthesized activation (`event.detail === 0`, see its own doc
+ *     comment), so the button is still genuinely focused when `Modal`
+ *     mounts, gets captured, and is correctly restored to on close — the
+ *     WAI-ARIA behaviour a keyboard user actually needs.
+ *
+ *   Removing the calls (round 2's version) "worked" for the restore itself
+ *   but invented focus a mouse user never had: it left the trigger focused
+ *   after a mouse-driven close, which is exactly the condition
+ *   `isButtonOwnedActivationKey` in `usePhysicalKeyboard.ts` treats as
+ *   "owns the next Enter/Space" — a mouse player who closed, say, Stats and
+ *   immediately pressed a bare Enter (without typing a letter first, which
+ *   would not be button-owned) would reopen Stats instead of submitting a
+ *   guess: the Task 20 bug, back through a different door. Restoring the
+ *   `blurOnMouseActivation` calls removes that regression entirely, because
+ *   there is no invented focus left to swallow anything.
+ *   `e2e/header-modal-focus.spec.ts` asserts both paths.
  */
 export function Modal({ titleId, title, onClose, children, headerExtra }: ModalProps) {
   const triggerRef = useRef<Element | null>(null);

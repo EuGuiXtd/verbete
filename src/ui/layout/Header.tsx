@@ -60,10 +60,12 @@ type OpenModal = 'help' | 'stats' | 'history' | 'about' | null;
  * button — see `OpenModal`'s doc comment. Theme is fully wired: `useTheme`
  * already exists and this task's scope explicitly includes it.
  *
- * Ajuda and Estatísticas deliberately do NOT call `blurOnMouseActivation` —
- * see `Modal.tsx`'s own doc comment on why a modal trigger needs the
- * opposite of every other chrome button's behaviour (it must stay focused
- * so closing the dialog has something real to return focus to).
+ * Ajuda and Estatísticas call `blurOnMouseActivation` exactly like every
+ * other chrome button in this app (mode/variant tabs, "nova palavra", the
+ * theme toggle) — see `Modal.tsx`'s own doc comment for why keeping it,
+ * rather than removing it (round 2 of this task's review removed it, then
+ * round 3 put it back), is what makes focus-restore-on-close correct for
+ * BOTH a mouse and a keyboard player, with no new trade-off for either.
  */
 export function Header() {
   const { theme, setTheme } = useTheme();
@@ -78,7 +80,8 @@ export function Header() {
           type="button"
           className="tecla px-3"
           aria-label="Ajuda"
-          onClick={() => {
+          onClick={(event: MouseEvent<HTMLButtonElement>) => {
+            blurOnMouseActivation(event);
             setOpenModal('help');
           }}
         >
@@ -88,7 +91,8 @@ export function Header() {
           type="button"
           className="tecla px-3"
           aria-label="Estatísticas"
-          onClick={() => {
+          onClick={(event: MouseEvent<HTMLButtonElement>) => {
+            blurOnMouseActivation(event);
             setOpenModal('stats');
           }}
         >
