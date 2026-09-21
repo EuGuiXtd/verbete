@@ -1,3 +1,161 @@
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /*
+   * Both html and body carry the paper colour. html matters because the
+   * browser paints the canvas from it before any element exists — that, plus
+   * the pre-paint script in index.html, is what stops a dark-mode player
+   * getting a white flash at 23:00.
+   */
+  html {
+    background-color: var(--paper);
+  }
+
+  body {
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: var(--text-body);
+    /* Newsreader carries an optical-size axis; letting the browser drive it
+       is the whole reason for choosing a variable serif here. */
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /*
+   * One focus treatment, and it is ink on paper: a 2px rule held off the
+   * element by a 2px gap. Because the ring lands outside the element it is
+   * always drawn on the sheet, so it survives on a fully inked black block
+   * and on a red one without needing a second colour.
+   */
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--ink-red);
+    color: var(--knockout);
+  }
+}
+
+@layer components {
+  /*
+   * A `sorte`: the block of metal type carrying one letter. The state
+   * classes below apply colour directly — never through an animation — so a
+   * hint can never be lost to a dropped frame or to reduced motion.
+   */
+  .sorte {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border-radius: var(--radius-tile);
+    font-size: var(--text-tile);
+    font-weight: 600;
+    /* Hold the optical size down at display sizes: Newsreader's small-text
+       masters have the thicker hairlines and shorter extenders that a metal
+       face cut for this size would have. At `auto` a 30px letter gets the
+       display master and goes spindly, which is exactly the look this is
+       trying not to be. */
+    font-variation-settings: 'opsz' 14;
+    line-height: 1;
+    user-select: none;
+    transition:
+      transform var(--press-duration) var(--press-ease),
+      box-shadow var(--press-duration) var(--press-ease);
+  }
+
+  /* Empty house: pressed, never filled. */
+  .sorte-vazia {
+    background-color: var(--paper-recess);
+    color: transparent;
+    box-shadow: theme('boxShadow.press-in');
+  }
+
+  /* Pressed, no ink took: the blind deboss. */
+  .sorte-ausente {
+    background-color: var(--paper);
+    color: var(--ghost);
+    box-shadow: theme('boxShadow.press-in');
+  }
+
+  /* Inked in the spot red — the letter is in the word, elsewhere. */
+  .sorte-presente {
+    background-color: var(--ink-red);
+    color: var(--knockout);
+    box-shadow: theme('boxShadow.press-out');
+  }
+
+  /* Inked solid — right letter, right house. */
+  .sorte-certa {
+    background-color: var(--ink);
+    color: var(--knockout);
+    box-shadow: theme('boxShadow.press-out');
+  }
+
+  /* A key with real travel. */
+  .tecla {
+    display: grid;
+    place-items: center;
+    min-width: 2rem;
+    padding: 0.7rem 0.5rem;
+    border-radius: var(--radius-key);
+    background-color: var(--paper-raised);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: var(--text-small);
+    font-weight: 600;
+    line-height: 1;
+    box-shadow: theme('boxShadow.press-out');
+    transition:
+      transform var(--press-duration) var(--press-ease),
+      box-shadow var(--press-duration) var(--press-ease);
+  }
+
+  .tecla:active {
+    transform: translateY(var(--press-depth));
+    box-shadow: theme('boxShadow.press-flat');
+  }
+
+  .tecla-ausente {
+    background-color: var(--paper);
+    color: var(--ghost);
+    box-shadow: theme('boxShadow.press-in');
+  }
+
+  .tecla-ausente:active {
+    transform: none;
+  }
+
+  .tecla-presente {
+    background-color: var(--ink-red);
+    color: var(--knockout);
+  }
+
+  .tecla-certa {
+    background-color: var(--ink);
+    color: var(--knockout);
+  }
+}
+
+/*
+ * Reduced motion: the press becomes an instant state change. The duration
+ * tokens already collapse to 0ms in tokens.css; this catches anything that
+ * reached for a literal duration instead of the token.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

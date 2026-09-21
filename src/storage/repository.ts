@@ -15,6 +15,7 @@ const DEFAULT_PREFS: PrefsRecord = {
   colorBlindMode: false,
   reduceMotion: false,
   hardMode: false,
+  theme: 'system',
 };
 
 export function loadProgress(variant: Variant, mode: Mode): ProgressRecord | null {
@@ -33,8 +34,17 @@ export function saveStats(variant: Variant, mode: Mode, stats: StatsRecord): boo
   return writeSlice(store, statsKey(variant, mode), stats);
 }
 
+/**
+ * Merges what was stored over the defaults rather than returning it whole.
+ * Prefs is the one slice that grows field by field as settings get added, and
+ * a record written before a field existed would otherwise come back with that
+ * field `undefined` while TypeScript insisted it was present. Merging makes
+ * adding a preference a non-event; it does NOT validate the values that are
+ * there, so a reader that cares about a specific field still guards it.
+ */
 export function loadPrefs(): PrefsRecord {
-  return readSlice<PrefsRecord>(store, prefsKey(), 'prefs') ?? DEFAULT_PREFS;
+  const stored = readSlice<Partial<PrefsRecord>>(store, prefsKey(), 'prefs');
+  return stored === null ? DEFAULT_PREFS : { ...DEFAULT_PREFS, ...stored };
 }
 
 export function savePrefs(prefs: PrefsRecord): boolean {

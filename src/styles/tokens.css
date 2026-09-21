@@ -1,0 +1,155 @@
+/*
+ * Verbete — design tokens.
+ *
+ * The metaphor is a letterpress shop, not a card kit. Light mode is a sheet
+ * of cotton rag under shop light; dark mode is the press bed — the metal
+ * matrix seen under a low lamp — so the ink goes light and the paper goes
+ * away. Nothing here is decorative: every value below is load-bearing for
+ * the one idea this design rests on.
+ *
+ * THE IDEA: ink coverage is the hint.
+ *
+ *   letter right, place right  -> block fully inked (--ink), letter knocked
+ *                                 out of the block in paper (--knockout)
+ *   letter present, wrong place-> block inked in the spot red (--ink-red),
+ *                                 letter knocked out in paper
+ *   letter absent              -> block never inked: a blind deboss in the
+ *                                 sheet, letter in --ghost
+ *
+ * The three states are therefore separated by VALUE, not only by hue —
+ * dark / mid / paper. Measured (8-bit grey after a greyscale pass):
+ *
+ *   light:  ink 27   ink-red 102   paper 228
+ *   dark:   ink 231  ink-red 125   paper 24
+ *
+ * That separation is what buys colour accessibility without a second
+ * "colour-blind palette", and it is the thing that makes this game not look
+ * like every other Wordle clone. If you change --ink or --ink-red, re-run the
+ * greyscale check in .superpowers/sdd/2026-09-20-verbete/design/ first.
+ *
+ * Contrast floors this palette holds (see the task-15 report for the table):
+ *   --ink on --paper            >= 13:1
+ *   --ghost on any paper tone   >= 4.5:1   (the absent letter must be read)
+ *   --knockout on --ink-red     >= 4.5:1   (the knocked-out letter)
+ *   --ink-red against --ink     >= 3:1     (the two inked states, by value)
+ */
+
+:root {
+  color-scheme: light;
+
+  /* --- paper -------------------------------------------------------- */
+  /* Cotton rag: warm GREY, deliberately not cream. Cream + serif +
+     terracotta is the house style of generated interfaces; this is a
+     pressroom, so the sheet is grey and the warmth comes from the ink. */
+  --paper: #e9e4da;
+  /* The lit face of something standing proud of the sheet: a key, a block. */
+  --paper-raised: #f1ede5;
+  /* An empty slot in the composing stick — pressed, never inked. */
+  --paper-recess: #ded7ca;
+  /* What a letter is knocked out in: the sheet showing through the ink. */
+  --knockout: #e9e4da;
+
+  /* --- ink ---------------------------------------------------------- */
+  /* Printer's black, warm — R > G > B, never a neutral #222. */
+  --ink: #1e1b17;
+  /* The second spot ink. Rubine, bodied like ink on uncoated stock. Lifted
+     from the spec's #a8323c so it clears 3:1 against --ink in greyscale
+     while the knocked-out letter still clears 4.5:1 against it. */
+  --ink-red: #b83843;
+  /* A discarded letter, and every piece of secondary text. Darkened hard from
+     the spec's #9a9288, which was a pretty 2.4:1 and therefore unreadable.
+     The floor it has to clear is 4.5:1 on the DARKEST paper surface it can
+     land on (--paper-recess), not just on --paper. */
+  --ghost: #645d53;
+  /* Hairline rules, in the sense a dictionary page uses them. */
+  --rule: #c6bcac;
+
+  /* --- the press ---------------------------------------------------- */
+  /* Shadow and highlight as channels, so alpha can vary per layer. The
+     shadow is a warm brown-black, not rgba(0,0,0,.1). */
+  --shadow-rgb: 58 48 36;
+  --highlight-rgb: 255 253 247;
+  /* How far a block stands off the sheet, and how far it travels when
+     pressed. One number, so the whole shop moves together. */
+  --press-depth: 3px;
+
+  /* --- edges -------------------------------------------------------- */
+  /* Not one radius on everything. A type block is milled metal, so its
+     corners are all but square; a key is moulded and slightly softer; a
+     sheet of paper is cut. */
+  --radius-tile: 2px;
+  --radius-key: 4px;
+  --radius-sheet: 2px;
+
+  /* --- motion ------------------------------------------------------- */
+  /* Revealing is pressing: the block travels down and comes back carrying
+     ink. Colour is applied by class, never by the animation, so a dropped
+     frame or a disabled animation can never lose a hint. */
+  --press-duration: 140ms;
+  --reveal-duration: 320ms;
+  --press-ease: cubic-bezier(0.2, 0.9, 0.25, 1);
+
+  /* --- type --------------------------------------------------------- */
+  --font-serif: 'Newsreader', ui-serif, Georgia, 'Times New Roman', serif;
+  --text-display: clamp(2.75rem, 9vw, 4rem);
+  --text-headword: clamp(1.75rem, 5.5vw, 2.375rem);
+  --text-tile: clamp(1.375rem, 6vw, 1.875rem);
+  --text-lead: 1.25rem;
+  --text-body: 1.0625rem;
+  --text-small: 0.875rem;
+  --text-micro: 0.75rem;
+}
+
+/*
+ * Dark — the press bed. Same three-way value split, inverted: the fully
+ * inked block is now the brightest thing on the page, because what you are
+ * looking at is polished type catching the lamp, and the un-inked sheet has
+ * become the dark bed underneath.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --paper: #1a1815;
+    --paper-raised: #232019;
+    --paper-recess: #131210;
+    --knockout: #131210;
+
+    --ink: #ede7da;
+    --ink-red: #d84d57;
+    --ghost: #8f8779;
+    --rule: #38332c;
+
+    --shadow-rgb: 0 0 0;
+    --highlight-rgb: 120 110 94;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --paper: #1a1815;
+  --paper-raised: #232019;
+  --paper-recess: #131210;
+  --knockout: #131210;
+
+  --ink: #ede7da;
+  --ink-red: #d84d57;
+  --ghost: #8f8779;
+  --rule: #38332c;
+
+  --shadow-rgb: 0 0 0;
+  --highlight-rgb: 120 110 94;
+}
+
+/*
+ * Reduced motion drops the press to an instant state change rather than a
+ * fast one. The durations are tokens precisely so this override is a single
+ * place, and so no component can hard-code its way around it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --press-duration: 0ms;
+    --reveal-duration: 0ms;
+  }
+}

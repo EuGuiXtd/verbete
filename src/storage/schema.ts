@@ -55,16 +55,28 @@ export interface HistoryEntry {
 }
 
 /**
- * User-facing settings. Nothing downstream consumes this yet (UI work starts
- * after this task) — these three are the smallest reasonable starting set for
- * a word game: an accessible palette, a request to skip animations, and the
- * classic "hard mode" (reuse revealed hints) toggle. Extend, don't reshape:
- * add fields as later tasks need them rather than guessing more now.
+ * Which appearance the player asked for. `'system'` means "no opinion, follow
+ * prefers-color-scheme", and is stored as an explicit value rather than as an
+ * absent field so that "never chose" and "chose to follow the OS" stay the
+ * same thing and neither needs a migration to express.
+ *
+ * It lives here rather than in state/ because it is part of the persisted
+ * shape: storage may not depend on UI code, and the pre-paint script in
+ * index.html reads these exact three strings straight out of localStorage.
+ */
+export type ThemeChoice = 'system' | 'light' | 'dark';
+
+/**
+ * User-facing settings. Extend, don't reshape: add fields as later tasks need
+ * them rather than guessing more now. Adding a field needs no migration —
+ * loadPrefs() merges what it reads over the defaults — but REMOVING or
+ * retyping one does.
  */
 export interface PrefsRecord {
   readonly colorBlindMode: boolean;
   readonly reduceMotion: boolean;
   readonly hardMode: boolean;
+  readonly theme: ThemeChoice;
 }
 
 /**
