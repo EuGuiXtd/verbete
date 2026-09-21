@@ -116,16 +116,24 @@
  * become the dark bed underneath.
  *
  * --ink-red is deliberately less saturated here than a straight hue-rotate
- * of the light value would give (48% vs 64%). On a near-black bed, a fully
- * saturated red picks up a Helmholtz–Kohlrausch boost — it reads brighter
- * than its luminance says — and was competing with the cream --ink block
- * for "heaviest thing on the tile" instead of ranking under it. Luminance
- * alone had almost no room to move here: --knockout on --ink-red was
- * already at 4.56:1 against a 4.5:1 floor, so darkening the old, vivid
- * #d84d57 to buy separation would have clipped that floor almost
- * immediately. Desaturating toward #c76066 fixes the rank the eye actually
- * sees while giving the contrast floors *more* headroom, not less (see the
- * task-15 report for the full before/after table).
+ * of the light value would give (48% vs 64%), because the old, fully
+ * saturated #d84d57 was competing with the cream --ink block for "heaviest
+ * thing on the tile" instead of ranking under it. That is NOT because the
+ * contrast floors left no room to darken at the original hue/saturation —
+ * they did: at 355.7°/64%, --ink-red can move anywhere from about #d84b55
+ * to #da5861 (an ~0.032 window in relative luminance, roughly ten grey
+ * levels) and still clear both --knockout-on-ink-red >= 4.5:1 and
+ * --ink-red-vs-ink >= 3:1 with real margin. Rendering that darkened-but-
+ * still-saturated family in the actual tiles is what ruled it out: it still
+ * read as vivid as the original next to the cream block (a saturated red
+ * picks up a Helmholtz–Kohlrausch boost — it reads brighter than its
+ * luminance says), so the "heaviest thing" competition survived the darken.
+ * Desaturating toward #c76066 is what actually fixed the rank the eye sees,
+ * and it happens to buy the contrast floors *more* headroom too, not less
+ * (see the task-15 report for the before/after table and the render
+ * comparison). If you revisit this colour, the thing to re-test is the
+ * perceptual rank in real tiles, not the contrast maths — the maths was
+ * never the constraint.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
