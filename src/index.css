@@ -78,6 +78,21 @@
     box-shadow: theme('boxShadow.press-in');
   }
 
+  /*
+   * Set but not yet pressed: a letter has been typed into the active row but
+   * not submitted. Built like .sorte-vazia and .sorte-ausente (background +
+   * text colour + one box-shadow, nothing else) but with the other two
+   * dials turned the opposite way from .sorte-vazia: the letter is already
+   * inked (--ink, not transparent) because it is legible type, not an empty
+   * house, and the block stands proud (press-out, not press-in) because it
+   * has not been struck yet — only submission presses it down.
+   */
+  .sorte-preenchida {
+    background-color: var(--paper);
+    color: var(--ink);
+    box-shadow: theme('boxShadow.press-out');
+  }
+
   /* Pressed, no ink took: the blind deboss. */
   .sorte-ausente {
     background-color: var(--paper);
