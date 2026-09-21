@@ -216,6 +216,26 @@ function loadOrCreateDaily(variant: Variant, dayKey: string): MatchState {
 }
 
 /**
+ * The structural property infinite restore actually needs from a stored
+ * `answers` field: an array of exactly `expectedCount` strings. Mirrors
+ * `hasReplayableGuesses` above, for the same reason — `record.answers` is
+ * typed `readonly string[] | null` on `ProgressRecord`, but that type is
+ * only ever checked at compile time; `loadProgress` hands back whatever
+ * `JSON.parse` produced from localStorage, cast, not validated. Without this
+ * check a hand-edited or corrupt record could carry a non-array with a
+ * matching `.length` (a string is not an array but does have `.length`, so
+ * e.g. a four-character string would pass a bare `.length === boards` check
+ * for Quarteto) and reach `createMatch`'s `init.answers.map(...)`, which
+ * throws on a string (no `.map`) — or an array holding non-string entries,
+ * which reaches `normalize()` inside `createMatch`'s `.map` and throws
+ * there instead. Both are render-time crashes from a corrupt record, same
+ * failure class `hasReplayableGuesses` already guards against for guesses.
+ */
+function hasReplayableAnswers(answers: unknown, expectedCount: number): answers is readonly string[] {
+  return Array.isArray(answers) && answers.length === expectedCount && answers.every((answer) => typeof answer === 'string');
+}
+
+/**
  * Restores `variant`'s infinite match from storage when a record exists and
  * carries a plausible answer set. Infinite's answers were drawn at random
  * and are not re-derivable from anything else kept in storage, so — unlike
@@ -228,8 +248,7 @@ function loadOrCreateInfinite(variant: Variant, exclude: ReadonlySet<string>): M
     record !== null &&
     record.variant === variant &&
     record.mode === 'infinito' &&
-    record.answers !== null &&
-    record.answers.length === VARIANTS[variant].boards &&
+    hasReplayableAnswers(record.answers, VARIANTS[variant].boards) &&
     hasReplayableGuesses(record.guesses)
   ) {
     return replayMatch(record, record.answers);

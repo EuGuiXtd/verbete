@@ -280,6 +280,38 @@
     text-align: center;
     box-shadow: theme('boxShadow.press-out');
   }
+
+  /*
+   * The end-of-match reveal (ResultModal): a printed page laid over the
+   * press, not a floating SaaS dialog. `.cortina` is the room going dark
+   * around it — the shadow channel token, not a flat black overlay, so it
+   * stays warm in both themes the same way every other shadow in this file
+   * does — and `.folha` is the sheet itself: same shelf-and-shadow language
+   * as `.aviso`/`.tecla`, just larger, because this is the one moment the
+   * game hands the player an actual dictionary entry to read.
+   */
+  .cortina {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background-color: rgb(var(--shadow-rgb) / 0.5);
+  }
+
+  .folha {
+    width: 100%;
+    max-width: 28rem;
+    max-height: min(85vh, 40rem);
+    overflow-y: auto;
+    background-color: var(--paper-raised);
+    color: var(--ink);
+    border-radius: var(--radius-sheet);
+    padding: 1.75rem;
+    box-shadow: theme('boxShadow.press-out');
+  }
 }
 
 /*

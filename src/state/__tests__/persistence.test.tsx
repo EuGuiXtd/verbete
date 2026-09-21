@@ -281,4 +281,36 @@ describe('MatchProvider persistence', () => {
       expect(result.current.state.draft).toBe('');
     });
   });
+
+  describe('a malformed `answers` field fails safe instead of crashing', () => {
+    const base = {
+      variant: 'solo' as const,
+      mode: 'infinito' as const,
+      dayKey: null,
+      guesses: [],
+      draft: '',
+      answersHash: 'irrelevant-for-infinite-restore',
+      startedAt: 1,
+      finishedAt: null,
+    };
+
+    it.each([
+      [
+        'answers is a string whose length happens to match boardCount — has .length but no .map, the actual pre-fix crash',
+        'a',
+      ],
+      ['answers holds a non-string element — reaches normalize() and throws', [123]],
+      ['answers is the wrong length for this variant', ['casal', 'terra']],
+    ])('%s', (_label, answers) => {
+      saveRawProgress('solo', 'infinito', { ...base, answers });
+
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      // Falls back to a fresh match rather than throwing during render.
+      expect(result.current.state.status).toBe('playing');
+      expect(result.current.state.guesses).toEqual([]);
+      expect(result.current.state.boards).toHaveLength(1);
+      expect(typeof result.current.state.boards[0]?.answer).toBe('string');
+    });
+  });
 });

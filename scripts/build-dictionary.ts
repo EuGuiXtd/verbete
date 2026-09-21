@@ -1,5 +1,5 @@
-// Builds the game's two word lists from the raw VERO Hunspell dictionary and
-// the raw Portuguese Wiktionary extract:
+// Builds the game's word lists and definitions from the raw VERO Hunspell
+// dictionary and the raw Portuguese Wiktionary extract:
 //
 //   - guesses.generated.ts — every accepted five-letter guess, as normalized
 //     (accent-free, uppercase) comparison keys, packed with the base-26
@@ -8,6 +8,21 @@
 //     their accented display form, ranked by real-world frequency and
 //     restricted to genuine Wiktionary dictionary head-forms (no
 //     conjugations or plurals).
+//   - definitions.generated.json (Task 21) — a short, single-sense
+//     definition for as many answers as have a usable one, sourced from the
+//     same Wiktionary extract used above to decide answer eligibility. Each
+//     value is `"<pos abbrev> <gloss>"` (e.g. `"s.f. planta ornamental..."`),
+//     never the bare gloss alone, so the result screen can show a real
+//     part-of-speech abbreviation without a second generated file. A word
+//     with no usable gloss (none found, or every candidate would spoil the
+//     answer — see assertDefinitionDoesNotSpoil below) is simply absent from
+//     this file; it is NOT dropped from answers.generated.ts, which is
+//     unaffected by anything in this section. This is a CC BY-SA 4.0
+//     adaptation of Wikcionário content: one sense selected per word, out of
+//     however many that entry has, and shortened to fit the result screen —
+//     see NOTICE.md for the licence block this ships under, and the UI's
+//     link to https://pt.wiktionary.org/wiki/<word>, which is also how this
+//     satisfies CC BY-SA's attribution requirement.
 //
 // Run with: pnpm dict:build
 //
@@ -110,6 +125,8 @@ export interface BuildResult {
   guesses: string[];
   /** Accented display forms, ranked best-first, deduplicated by key. */
   answers: string[];
+  /** Accented answer -> "<pos abbrev> <gloss>", for whichever answers have a usable one. See buildDefinitions. */
+  definitions: Record<string, string>;
 }
 
 async function readOptionalFile(path: string): Promise<string | null> {
@@ -157,6 +174,8 @@ async function loadFrequencyRank(): Promise<Map<string, number>> {
 interface WiktionarySense {
   readonly form_of?: readonly unknown[];
   readonly tags?: readonly string[];
+  /** Sense definitions, core text first — see buildDefinition below. */
+  readonly glosses?: readonly string[];
 }
 
 interface WiktionaryEntry {
@@ -213,11 +232,17 @@ function isEntirelyObscure(entry: WiktionaryEntry): boolean {
 }
 
 /**
- * Loads the set of words with at least one genuine Portuguese Wiktionary
- * head-form entry: `pos` in ANSWER_ELIGIBLE_POS and not a form-of/inflection
- * entry (see isFormOf). This is the answer-eligibility authority (see the
- * "head-form authority" note at the top of this file for why VERO's own
- * structure isn't used for this anymore).
+ * Loads every genuine Portuguese Wiktionary head-form entry — `pos` in
+ * ANSWER_ELIGIBLE_POS and not a form-of/inflection entry (see isFormOf) —
+ * keyed by word, in file order, with every qualifying entry kept (a word can
+ * have more than one, e.g. both a noun and a verb reading). The *set* of
+ * keys is the answer-eligibility authority (see the "head-form authority"
+ * note at the top of this file for why VERO's own structure isn't used for
+ * this anymore); the entries themselves are also what Task 21's
+ * `buildDefinition` below sources a gloss from — deliberately the same
+ * entries that made the word eligible in the first place, not just any
+ * Wiktionary entry for that spelling, so a definition never comes from an
+ * obscure or foreign-loanword sense the answer list itself rejected.
  *
  * Reads data/raw/ptwiktionary.jsonl.gz — the raw wiktextract JSONL for
  * pt.wiktionary.org, one object per line, every language it documents
@@ -232,8 +257,8 @@ function isEntirelyObscure(entry: WiktionaryEntry): boolean {
  * confirmed to have no lowercase counterpart in Wiktionary either) from
  * matching a lowercase VERO candidate.
  */
-async function loadWiktionaryHeadForms(): Promise<Set<string>> {
-  const heads = new Set<string>();
+async function loadEligibleWiktionaryEntries(): Promise<Map<string, WiktionaryEntry[]>> {
+  const entries = new Map<string, WiktionaryEntry[]>();
   const input = createReadStream(WIKTIONARY_PATH).pipe(createGunzip());
   const lines = createInterface({ input, crlfDelay: Infinity });
 
@@ -250,10 +275,147 @@ async function loadWiktionaryHeadForms(): Promise<Set<string>> {
     if (isFormOf(entry)) continue;
     if (isTaggedForeignLoanword(entry)) continue;
     if (isEntirelyObscure(entry)) continue;
-    heads.add(toNfc(entry.word));
+
+    const word = toNfc(entry.word);
+    const existing = entries.get(word);
+    if (existing) {
+      existing.push(entry);
+    } else {
+      entries.set(word, [entry]);
+    }
   }
 
-  return heads;
+  return entries;
+}
+
+// --- Task 21: definitions ------------------------------------------------
+
+/** Truncation target for a gloss, before the part-of-speech prefix is added. */
+const MAX_GLOSS_LENGTH = 90;
+
+/** Collapses Wiktionary's internal whitespace/newlines to single spaces and trims the ends. */
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Cuts `text` to at most `maxLength` characters, backing up to the last
+ * space so a word is never sliced in half, and marks the cut with an
+ * ellipsis. Text already within the budget is returned unchanged (no
+ * trailing ellipsis on a gloss that was never truncated).
+ */
+function truncateAtWordBoundary(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  const slice = text.slice(0, maxLength);
+  const lastSpace = slice.lastIndexOf(' ');
+  const cut = (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trimEnd();
+  return `${cut}…`;
+}
+
+/**
+ * The gender/class abbreviation the result screen prefixes a definition
+ * with — "s.m." the way a paper dictionary would head "casa", not a bare
+ * gloss with no grammatical marker. Wiktionary tags noun gender on the entry
+ * itself (`tags: ["masculine"]` / `["feminine"]`, occasionally both for a
+ * two-gender noun); a noun entry with neither tag falls back to the bare
+ * "s." rather than guessing.
+ */
+function posAbbreviation(entry: WiktionaryEntry): string {
+  const tags = entry.tags ?? [];
+  switch (entry.pos) {
+    case 'noun': {
+      const masculine = tags.includes('masculine');
+      const feminine = tags.includes('feminine');
+      if (masculine && feminine) return 's.2g.';
+      if (feminine) return 's.f.';
+      if (masculine) return 's.m.';
+      return 's.';
+    }
+    case 'adj':
+      return 'adj.';
+    case 'adv':
+      return 'adv.';
+    case 'verb':
+      return 'v.';
+    default:
+      return '';
+  }
+}
+
+/** The first four normalized letters of `word` — the same substring a player would already recognize mid-guess. */
+function definitionStem(word: string): string {
+  return normalize(word).slice(0, 4);
+}
+
+/** True if `definition` contains `word`'s own stem — see assertDefinitionDoesNotSpoil. */
+function spoilsAnswer(word: string, definition: string): boolean {
+  return normalize(definition).includes(definitionStem(word));
+}
+
+/**
+ * The hard gate: throws — never warns — if `definition` would spoil `word`.
+ * Wiktionary defines "casar" (a real answer — see src/data/answers.generated.ts)
+ * with a first sense of "ato de unir por casamento...", which contains
+ * "casa" and would hand the player the answer inside its own reward. Called
+ * unconditionally over every entry actually written to
+ * definitions.generated.json (see buildDefinitions' caller in main()) as a
+ * safety net — buildDefinition below already skips a spoiling candidate
+ * sense in favour of the next one, so this should never actually fire in
+ * practice, but a future change to that selection logic that reintroduces a
+ * spoiler must fail the build, not ship it with a warning nobody reads.
+ */
+export function assertDefinitionDoesNotSpoil(word: string, definition: string): void {
+  if (spoilsAnswer(word, definition)) {
+    throw new Error(
+      `definition of "${word}" contains its own stem and would spoil the answer: ${definition}`,
+    );
+  }
+}
+
+/**
+ * Picks the first sense, across `entries` in file order, whose first gloss
+ * is non-empty and does not spoil `word` (see spoilsAnswer) — "casar"'s own
+ * first sense is skipped this way in favour of its second ("ligar; juntar;
+ * unir"), rather than failing the whole word. Returns null when nothing
+ * eligible survives (no gloss anywhere, or every candidate spoils): the word
+ * is then simply absent from definitions.generated.json, per this file's own
+ * top-of-file note — it stays a perfectly playable answer regardless.
+ */
+function buildDefinition(word: string, entries: readonly WiktionaryEntry[]): string | null {
+  for (const entry of entries) {
+    const abbrev = posAbbreviation(entry);
+    for (const sense of entry.senses ?? []) {
+      const rawGloss = sense.glosses?.[0];
+      if (rawGloss === undefined) continue;
+      const gloss = truncateAtWordBoundary(collapseWhitespace(rawGloss), MAX_GLOSS_LENGTH);
+      if (gloss === '') continue;
+      if (spoilsAnswer(word, gloss)) continue;
+      return abbrev === '' ? gloss : `${abbrev} ${gloss}`;
+    }
+  }
+  return null;
+}
+
+/** Builds the final word -> "<abbrev> <gloss>" map, in `answers`' own order, for every answer with a usable gloss. */
+function buildDefinitions(
+  answers: readonly string[],
+  wiktionaryEntries: ReadonlyMap<string, WiktionaryEntry[]>,
+): Record<string, string> {
+  const definitions: Record<string, string> = {};
+  for (const answer of answers) {
+    const entries = wiktionaryEntries.get(answer);
+    if (!entries) continue;
+    const definition = buildDefinition(answer, entries);
+    if (definition !== null) definitions[answer] = definition;
+  }
+  return definitions;
+}
+
+/** Runs assertDefinitionDoesNotSpoil over every entry actually being shipped. Must throw, not warn — see that function's doc comment. */
+export function assertDefinitionsDoNotSpoil(definitions: Readonly<Record<string, string>>): void {
+  for (const [word, definition] of Object.entries(definitions)) {
+    assertDefinitionDoesNotSpoil(word, definition);
+  }
 }
 
 /** Runs the affix-expansion + filtering pipeline (steps 1–8) and returns the two word lists. */
@@ -298,16 +460,16 @@ export async function buildDictionary(): Promise<BuildResult> {
 
   // Step 5 and the Wiktionary head-form authority, concurrently — two
   // independent file reads.
-  const [frequencyRank, wiktionaryHeadForms] = await Promise.all([
+  const [frequencyRank, wiktionaryEntries] = await Promise.all([
     loadFrequencyRank(),
-    loadWiktionaryHeadForms(),
+    loadEligibleWiktionaryEntries(),
   ]);
 
   // Step 6: guess-list words that are genuine Wiktionary head-forms AND
   // present in the frequency list, ranked best first, top ANSWER_TARGET.
   const ranked = [...candidateWords]
     .filter((word) => guessSet.has(normalize(word)))
-    .filter((word) => wiktionaryHeadForms.has(word))
+    .filter((word) => wiktionaryEntries.has(word))
     .filter((word) => frequencyRank.has(word))
     .sort((a, b) => frequencyRank.get(a)! - frequencyRank.get(b)!)
     .slice(0, ANSWER_TARGET);
@@ -327,7 +489,13 @@ export async function buildDictionary(): Promise<BuildResult> {
     if (!answersByKey.has(key)) answersByKey.set(key, word);
   }
 
-  return { guesses, answers: [...answersByKey.values()] };
+  const answers = [...answersByKey.values()];
+  // Task 21: one short definition per answer that has a usable, non-spoiling
+  // gloss, sourced from the very same eligible entries decided step 6's
+  // membership above — see buildDefinitions and its doc comments.
+  const definitions = buildDefinitions(answers, wiktionaryEntries);
+
+  return { guesses, answers, definitions };
 }
 
 /**
@@ -394,23 +562,40 @@ ${entries}
 `;
 }
 
-/** Writes both generated files into `dir`. Exported so dict:check can reuse it against a temp dir. */
+/**
+ * definitions.generated.json is plain JSON — dynamically imported at
+ * runtime by src/data/definitions.ts, so it cannot carry a JS comment header
+ * the way the two `.ts` files above do. Its CC BY-SA 4.0 provenance and
+ * adaptation note live in NOTICE.md and in this script's own top-of-file
+ * comment instead; the in-app link to https://pt.wiktionary.org/wiki/<word>
+ * (src/ui/modals/ResultModal.tsx) is what satisfies attribution for a player
+ * actually looking at the data, per CC BY-SA 4.0's own preferred practice.
+ */
+function renderDefinitionsSource(definitions: Readonly<Record<string, string>>): string {
+  return JSON.stringify(definitions);
+}
+
+/** Writes every generated file into `dir`. Exported so dict:check can reuse it against a temp dir. */
 export async function writeGeneratedFiles(
   dir: string,
   guesses: readonly string[],
   answers: readonly string[],
+  definitions: Readonly<Record<string, string>>,
 ): Promise<void> {
   await mkdir(dir, { recursive: true });
   await writeFile(`${dir}/guesses.generated.ts`, renderGuessesSource(guesses), 'utf8');
   await writeFile(`${dir}/answers.generated.ts`, renderAnswersSource(answers), 'utf8');
+  await writeFile(`${dir}/definitions.generated.json`, renderDefinitionsSource(definitions), 'utf8');
 }
 
 async function main(): Promise<void> {
-  const { guesses, answers } = await buildDictionary();
+  const { guesses, answers, definitions } = await buildDictionary();
   assertBuildInvariants(guesses, answers);
-  await writeGeneratedFiles('src/data', guesses, answers);
+  assertDefinitionsDoNotSpoil(definitions);
+  await writeGeneratedFiles('src/data', guesses, answers, definitions);
   console.log(`guesses: ${guesses.length}`);
   console.log(`answers: ${answers.length}`);
+  console.log(`definitions: ${Object.keys(definitions).length} (${(Object.keys(definitions).length / answers.length * 100).toFixed(1)}% of answers)`);
 }
 
 const isMain = process.argv[1] !== undefined && process.argv[1].endsWith('build-dictionary.ts');

@@ -9,18 +9,24 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildDictionary, assertBuildInvariants, writeGeneratedFiles } from './build-dictionary';
+import {
+  buildDictionary,
+  assertBuildInvariants,
+  assertDefinitionsDoNotSpoil,
+  writeGeneratedFiles,
+} from './build-dictionary';
 
 const COMMITTED_DIR = 'src/data';
-const GENERATED_FILES = ['guesses.generated.ts', 'answers.generated.ts'];
+const GENERATED_FILES = ['guesses.generated.ts', 'answers.generated.ts', 'definitions.generated.json'];
 
 async function main(): Promise<void> {
-  const { guesses, answers } = await buildDictionary();
+  const { guesses, answers, definitions } = await buildDictionary();
   assertBuildInvariants(guesses, answers);
+  assertDefinitionsDoNotSpoil(definitions);
 
   const tempDir = await mkdtemp(join(tmpdir(), 'verbete-dict-check-'));
   try {
-    await writeGeneratedFiles(tempDir, guesses, answers);
+    await writeGeneratedFiles(tempDir, guesses, answers, definitions);
 
     const stale: string[] = [];
     for (const file of GENERATED_FILES) {

@@ -170,20 +170,35 @@ not `unmunch`).
 - **Used for (Task 8, pulled forward from Task 21 by controller ruling):** the head-form
   authority for candidate answers — a word is answer-eligible only if this extract has a
   matching Portuguese entry whose part of speech is noun/adjective/adverb/verb and which is not
-  itself a form-of/inflection entry (see the Task 8 report). **Also used for (Task 21, not yet
-  implemented):** word definitions shown in the finished game.
-- **Redistribution status for this task (Task 8): BUILD-TIME ONLY, NEVER REDISTRIBUTED.** Only
-  the *existence and part-of-speech* of a Wiktionary entry is used to decide list membership; no
-  Wiktionary text (glosses, examples, etc.) is copied into `answers.generated.ts` — it holds only
-  the word strings themselves. This is the same build-time-only treatment as `pt_br_50k.txt`
-  below. **This changes in Task 21**, when `data/definicoes.json` is added: that file *will*
-  redistribute actual Wiktionary sense text and carry the CC BY-SA 4.0 obligation `NOTICE.md`
-  already documents for it.
+  itself a form-of/inflection entry (see the Task 8 report). **Also used for (Task 21):** the
+  short definitions shown when a match ends — see `src/data/definitions.generated.json` and the
+  Task 21 report.
+- **Redistribution status: split by consumer.** The *existence and part-of-speech* check that
+  decides answer-list membership (Task 8, `answers.generated.ts`) remains build-time only — no
+  Wiktionary text is copied into that file, only word strings, same as `pt_br_50k.txt` below.
+  **`src/data/definitions.generated.json` (Task 21) is REDISTRIBUTED**: it embeds one shortened
+  gloss per answer (1,536 of 1,617), which is actual Wiktionary sense text and carries the CC BY-
+  SA 4.0 obligation `NOTICE.md` documents for it — attribution is given via the result screen's
+  link to the specific `https://pt.wiktionary.org/wiki/<word>` article each definition came from.
 - **Fetched automatically:** `scripts/fetch-sources.ts` downloads this file like the other three
   raw sources (idempotent — skipped if already present). The original plan expected this file to
   need a manual download step because kaikki's *processed* per-language JSONL filenames churn
   between releases; that concern turned out not to apply to this specific raw-data endpoint,
   whose URL is stable.
+
+### Task 21 measured build results
+
+`src/data/definitions.generated.json`: **1,536 of 1,617 answers (95.0%)** got a usable, non-
+spoiling definition; the remaining 81 have none, either because the eligible Wiktionary
+entries for that word had no non-empty gloss, or because every gloss found would have contained
+the answer's own stem (see `assertDefinitionDoesNotSpoil` in `scripts/build-dictionary.ts`) — a
+dropped word stays a fully playable answer, it just gets no definition line at the reveal. Raw
+generated file: 92,256 bytes; **gzip -9: 35,574 bytes** (comfortably inside the ~55–70 KB
+estimate the spec guessed at) — served as its own code-split chunk (Vite's dynamic-`import()`
+output, e.g. `dist/assets/definitions.generated-<hash>.js`), never part of the initial bundle.
+Longest generated value measured at 95 characters (the ~90-character gloss truncation plus its
+part-of-speech prefix), comfortably under the 100-character ceiling `src/data/__tests__/
+definitions.test.ts` checks.
 
 ## Summary table
 
@@ -191,7 +206,7 @@ not `unmunch`).
 |---|---|---|
 | `pt_BR.dic` / `pt_BR.aff` (VERO) | Yes — generated word lists ship in the bundle | LGPL-3.0, additionally MPL to the extent upstream's unversioned grant permits (see "Licence" above — ambiguous upstream, four disagreeing downstream readings) |
 | `pt_br_50k.txt` (FrequencyWords) | No — build-time ranking input only | CC BY-SA 4.0 (content), per upstream README |
-| `ptwiktionary.jsonl.gz` (kaikki/Wiktionary) | No for Task 8 (build-time head-form check only); will be, once Task 21 adds `data/definicoes.json` | CC BY-SA 4.0 (Wikcionário) |
+| `ptwiktionary.jsonl.gz` (kaikki/Wiktionary) | No, for the Task 8 head-form check (`answers.generated.ts`) — Yes, for Task 21's `src/data/definitions.generated.json` | CC BY-SA 4.0 (Wikcionário) |
 
 ## Unresolved
 

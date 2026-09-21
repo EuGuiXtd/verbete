@@ -9,27 +9,8 @@ import { Header } from './ui/layout/Header';
 import { ModeTabs } from './ui/layout/ModeTabs';
 import { Shell } from './ui/layout/Shell';
 import { Keyboard } from './ui/keyboard/Keyboard';
+import { ResultModal } from './ui/modals/ResultModal';
 import type { MouseEvent } from 'react';
-
-/**
- * The end-of-match status line. No result modal in this task's scope (Task
- * 21 adds the dictionary-entry ResultModal) — just enough for a player to
- * see the outcome. There is no reset control here: infinite mode's is the
- * persistent "nova palavra" button in ModeTabs (reachable before finishing
- * too, not only after), and a finished daily match has nothing to reset —
- * one puzzle a day is the entire point.
- */
-function MatchOutcome() {
-  const { state } = useMatch();
-  if (state.status === 'playing') return null;
-
-  const board = state.boards[0];
-  return (
-    <p className="text-lead text-center">
-      {state.status === 'won' ? 'Você acertou!' : `Não foi dessa vez. A palavra era "${board?.answer ?? ''}".`}
-    </p>
-  );
-}
 
 /**
  * "Chegou o verbete de hoje": the day rolled over while this variant's
@@ -83,8 +64,13 @@ function GameScreen() {
                 <Board key={index} state={state} boardIndex={index} shakeToken={shakeToken} />
               ))}
             </div>
-            <MatchOutcome />
           </div>
+          {/*
+            Task 21: the end-of-match reveal. Renders nothing while
+            state.status === 'playing' — see ResultModal's own doc comment
+            for why it replaces the old inline MatchOutcome status line.
+          */}
+          <ResultModal />
         </>
       }
       keyboard={

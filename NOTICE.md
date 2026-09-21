@@ -33,17 +33,31 @@ permits. No specific MPL version is asserted.
 
 ## Wikcionário (Portuguese Wiktionary) — word definitions
 
-*Not yet present in this repository.* This block is written now so the obligation is recorded
-before the data it covers exists. Task 21 will add `data/definicoes.json`, containing word
-definitions derived from the Portuguese-language Wiktionary (Wikcionário), extracted via
-kaikki.org (`https://kaikki.org/ptwiktionary/`).
+Added by Task 21. `src/data/definitions.generated.json` (produced by `pnpm dict:build` from
+`scripts/build-dictionary.ts`, sourced from `data/raw/ptwiktionary.jsonl.gz`) contains a short
+definition for 1,536 of this game's 1,617 answers — the ~5% with no usable, non-spoiling gloss
+(see "Adaptation made" below) are simply absent from the file, never from the answer list itself.
+The file name differs from what this block originally announced (`data/definicoes.json`): it
+ships under `src/data/` instead, as a plain JSON module the game loads via a dynamic `import()`
+(see `src/data/definitions.ts`) rather than a top-level data file, so its ~35 KB (gzip) payload
+stays out of the initial bundle. Nothing about the licence obligation below changes with the
+path.
 
-**Adaptation made (planned, Task 21):** definitions will be extracted from Wiktionary's raw
-sense data, filtered to the senses relevant to this game's word list, and reformatted into the
-flat `data/definicoes.json` structure the game consumes — not reproduced as full Wiktionary
-entries.
+**Adaptation made:** for each answer, the first Wiktionary sense (in entry order) whose gloss is
+non-empty and does not itself contain the answer's own stem is selected — a check that matters in
+practice: Wiktionary's own first sense for "casar" is "ato de unir por casamento...", which
+contains "casa" and would spoil the game's own reward, so that entry falls through to its second
+sense instead (see `scripts/build-dictionary.ts`'s `assertDefinitionDoesNotSpoil` and
+`buildDefinition`). The selected gloss is whitespace-normalized and truncated to roughly 90
+characters on a word boundary, and prefixed with a part-of-speech abbreviation ("s.f.", "adj.",
+"v.", ...) derived from the same Wiktionary entry. This is a single sense selected out of however
+many the real entry has, shortened to fit a result screen — an adaptation, not a reproduction of
+the entry.
 
-**Licence:** Wiktionary content is licensed under **CC BY-SA 4.0**. `data/definicoes.json`, once
-added, is a derivative work of Wikcionário content and is distributed under the same licence,
-with attribution to the Wikcionário contributors and a link back to
-`https://pt.wiktionary.org/`.
+**Licence:** Wiktionary content is licensed under **CC BY-SA 4.0**.
+`src/data/definitions.generated.json` is a derivative work of Wikcionário content and is
+distributed under the same licence. Attribution is given in the product itself, not only in this
+file: the result screen that shows each definition links directly to
+`https://pt.wiktionary.org/wiki/<word>` — the specific article the text was adapted from, per
+word — which per CC BY-SA 4.0's own recommended practice is the most robust way to credit the
+original authors and to indicate that the material was adapted.
