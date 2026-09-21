@@ -226,8 +226,8 @@ reason about in a place where safety, not cleverness, is the goal.
 | Source | Redistributed? | Licence (as this project treats it) |
 |---|---|---|
 | `pt_BR.dic` / `pt_BR.aff` (VERO) | Yes — generated word lists ship in the bundle | LGPL-3.0, additionally MPL to the extent upstream's unversioned grant permits (see "Licence" above — ambiguous upstream, four disagreeing downstream readings) |
-| `pt_br_50k.txt` (FrequencyWords) | No — build-time ranking input only | CC BY-SA 4.0 (content), per upstream README |
-| `ptwiktionary.jsonl.gz` (kaikki/Wiktionary) | No, for the Task 8 head-form check (`answers.generated.ts`) — Yes, for Task 21's `src/data/definitions.generated.json` | CC BY-SA 4.0 (Wikcionário) |
+| `pt_br_50k.txt` (FrequencyWords) | No — build-time ranking input only | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (content), per upstream README |
+| `ptwiktionary.jsonl.gz` (kaikki/Wiktionary) | No, for the Task 8 head-form check (`answers.generated.ts`) — Yes, for Task 21's `src/data/definitions.generated.json` | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (Wikcionário) |
 
 ## Unresolved
 

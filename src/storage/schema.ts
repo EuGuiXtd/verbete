@@ -44,7 +44,19 @@ export interface ProgressRecord {
   readonly finishedAt?: number | null;
 }
 
-/** One completed match, appended to the running history log. */
+/**
+ * One completed match, appended to the running history log.
+ *
+ * `answers` (added by Task 22, for HistoryModal) is the lowercase, accented
+ * display form of each board's word, in board order — the same strings
+ * `BoardState.answer` carries, and the same shape `definitions.ts` looks up
+ * by. It is additive, not a reshape: an entry appended before Task 22 has no
+ * such field on disk, so a reader must still tolerate one being absent
+ * (`Array.isArray` before use, the same defensive shape check
+ * `hasReplayableAnswers` already applies to a stored `ProgressRecord`)
+ * rather than trusting the type checker's compile-time guarantee against
+ * data that predates it.
+ */
 export interface HistoryEntry {
   readonly variant: Variant;
   readonly mode: Mode;
@@ -52,6 +64,7 @@ export interface HistoryEntry {
   readonly won: boolean;
   readonly attempts: number | null;
   readonly finishedAt: number;
+  readonly answers: readonly string[];
 }
 
 /**

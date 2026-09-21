@@ -150,4 +150,47 @@ describe('ResultModal', () => {
 
     expect(writeText).toHaveBeenCalledWith('casal');
   });
+
+  describe('sharing', () => {
+    afterEach(() => {
+      Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+    });
+
+    it('shares the result via navigator.share and shows "compartilhado!" feedback, never leaking the answer', async () => {
+      const share = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+
+      render(<Harness />, { wrapper });
+      fireEvent.click(screen.getByRole('button', { name: 'win' }));
+      await screen.findByRole('dialog');
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /compartilhar/i }));
+        await Promise.resolve();
+      });
+
+      expect(share).toHaveBeenCalledTimes(1);
+      const sharedText = (share.mock.calls[0]?.[0] as { text: string }).text;
+      expect(sharedText).not.toContain('CASAL');
+      expect(await screen.findByText('compartilhado!')).toBeDefined();
+    });
+
+    it('falls back to the clipboard and shows "copiado!" when navigator.share does not exist', async () => {
+      Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, { clipboard: { writeText } });
+
+      render(<Harness />, { wrapper });
+      fireEvent.click(screen.getByRole('button', { name: 'win' }));
+      await screen.findByRole('dialog');
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /compartilhar/i }));
+        await Promise.resolve();
+      });
+
+      expect(writeText).toHaveBeenCalledTimes(1);
+      expect(await screen.findByText('copiado!')).toBeDefined();
+    });
+  });
 });

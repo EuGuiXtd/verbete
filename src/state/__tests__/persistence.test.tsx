@@ -224,6 +224,9 @@ describe('MatchProvider persistence', () => {
     expect(loadStats('solo', 'infinito').wins).toBe(1);
     expect(loadHistory()).toHaveLength(1);
     expect(loadHistory()[0]).toMatchObject({ variant: 'solo', mode: 'infinito', won: true, attempts: 1 });
+    // Task 22's HistoryModal reads this straight off the history entry — a
+    // regression here would silently make every history row wordless.
+    expect(loadHistory()[0]?.answers).toEqual(['casal']);
   });
 
   it('does not un-finish a won match on replay, even if the dictionary would now reject the winning guess', () => {

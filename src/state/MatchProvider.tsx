@@ -576,6 +576,10 @@ export function MatchProvider({ children }: MatchProviderProps) {
             won: effect.status === 'won',
             attempts,
             finishedAt: activeMatch.finishedAt ?? Date.now(),
+            // Task 22's HistoryModal is the only place a player can revisit
+            // a word they learned; without this the history log would have
+            // nothing to show but a date and a score.
+            answers: activeMatch.boards.map((board) => board.answer),
           });
           saveProgress(toProgressRecord(slice.active, activeMatch));
           break;

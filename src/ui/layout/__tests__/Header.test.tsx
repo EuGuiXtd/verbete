@@ -48,15 +48,46 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: /tema/i })).toBeDefined();
   });
 
-  it('marks Ajuda and Estatísticas disabled — no modal exists yet (Task 22), so a press must not go silent', () => {
+  it('leaves every header control enabled — Task 22 wired Ajuda and Estatísticas up', () => {
     render(<Header />);
     const help = screen.getByRole('button', { name: /ajuda/i }) as HTMLButtonElement;
     const stats = screen.getByRole('button', { name: /estatísticas/i }) as HTMLButtonElement;
     const theme = screen.getByRole('button', { name: /tema/i }) as HTMLButtonElement;
 
-    expect(help.disabled).toBe(true);
-    expect(stats.disabled).toBe(true);
+    expect(help.disabled).toBe(false);
+    expect(stats.disabled).toBe(false);
     expect(theme.disabled).toBe(false);
+  });
+
+  it('opens HelpModal from Ajuda and closes it again on Escape', () => {
+    render(<Header />);
+    fireEvent.click(screen.getByRole('button', { name: /ajuda/i }));
+    expect(screen.getByRole('dialog', { name: /como jogar/i })).toBeDefined();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('opens StatsModal from Estatísticas, and only one dialog is on screen at a time', () => {
+    render(<Header />);
+    fireEvent.click(screen.getByRole('button', { name: /estatísticas/i }));
+    expect(screen.getByRole('dialog', { name: /estatísticas/i })).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /ajuda/i }));
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('dialog', { name: /como jogar/i })).toBeDefined();
+  });
+
+  it('reaches About from inside Help, and History from inside Stats', () => {
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: /ajuda/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sobre as fontes/i }));
+    expect(screen.getByRole('dialog', { name: /sobre as palavras/i })).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /estatísticas/i }));
+    fireEvent.click(screen.getByRole('button', { name: /ver histórico/i }));
+    expect(screen.getByRole('dialog', { name: /histórico/i })).toBeDefined();
   });
 
   it('cycles the theme through the document attribute when its button is pressed', () => {

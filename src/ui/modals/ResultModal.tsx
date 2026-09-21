@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { useMatch } from '../../state/useMatch';
 import { useDefinition } from '../../state/useDefinition';
+import { useShare } from '../../state/useShare';
+import type { ShareOutcome } from '../../state/useShare';
 import { blurOnMouseActivation } from '../blurOnMouseActivation';
 
 const STATUS_HEADLINE: Record<'won' | 'lost', string> = {
@@ -11,6 +13,12 @@ const STATUS_HEADLINE: Record<'won' | 'lost', string> = {
 
 /** How long "copiado" stays up after a successful report before reverting to the quiet default label. */
 const COPIED_FEEDBACK_MS = 2000;
+
+/** What the share control's label swaps to for each outcome `useShare` can report. 'failed' shows nothing — see below. */
+const SHARE_FEEDBACK: Record<Exclude<ShareOutcome, 'failed'>, string> = {
+  shared: 'compartilhado!',
+  copied: 'copiado!',
+};
 
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
@@ -144,6 +152,9 @@ function VerbeteEntry({ answer }: VerbeteEntryProps) {
 export function ResultModal() {
   const { state, active } = useMatch();
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const share = useShare();
+  const [shareFeedback, setShareFeedback] = useState<Exclude<ShareOutcome, 'failed'> | null>(null);
+  const shareFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const matchKey = `${active.variant}:${active.mode}:${String(state.finishedAt)}`;
   const visible = state.status !== 'playing' && dismissedKey !== matchKey;
@@ -158,6 +169,28 @@ export function ResultModal() {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [visible, matchKey]);
+
+  useEffect(
+    () => () => {
+      if (shareFeedbackTimeoutRef.current !== null) clearTimeout(shareFeedbackTimeoutRef.current);
+    },
+    [],
+  );
+
+  const handleShare = (event: MouseEvent<HTMLButtonElement>) => {
+    blurOnMouseActivation(event);
+    void share(state).then((outcome) => {
+      // 'failed' covers both an unsupported browser and the player
+      // dismissing the share sheet — see useShare's own doc comment for why
+      // neither is worth surfacing here.
+      if (outcome === 'failed') return;
+      setShareFeedback(outcome);
+      if (shareFeedbackTimeoutRef.current !== null) clearTimeout(shareFeedbackTimeoutRef.current);
+      shareFeedbackTimeoutRef.current = setTimeout(() => {
+        setShareFeedback(null);
+      }, COPIED_FEEDBACK_MS);
+    });
+  };
 
   if (!visible) return null;
   // `visible` already narrowed state.status away from 'playing'.
@@ -175,16 +208,25 @@ export function ResultModal() {
           <p id="resultado-titulo" className="text-lead">
             {headline}
           </p>
-          <button
-            type="button"
-            className="text-small text-ghost underline decoration-rule underline-offset-2"
-            onClick={(event: MouseEvent<HTMLButtonElement>) => {
-              blurOnMouseActivation(event);
-              setDismissedKey(matchKey);
-            }}
-          >
-            fechar
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              className="text-small text-ghost underline decoration-rule underline-offset-2"
+              onClick={handleShare}
+            >
+              {shareFeedback ? SHARE_FEEDBACK[shareFeedback] : 'compartilhar'}
+            </button>
+            <button
+              type="button"
+              className="text-small text-ghost underline decoration-rule underline-offset-2"
+              onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                blurOnMouseActivation(event);
+                setDismissedKey(matchKey);
+              }}
+            >
+              fechar
+            </button>
+          </div>
         </div>
         {/* The masthead-over-body hairline a printed dictionary page uses — see .folha-regua's own comment in index.css. */}
         <div className="folha-regua" />
