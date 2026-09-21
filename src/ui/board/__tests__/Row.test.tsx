@@ -39,6 +39,23 @@ describe('Row', () => {
     });
   });
 
+  it('carries the shake class only when told to, and never by default', () => {
+    const cells: RowCell[] = [
+      { letter: '', state: 'empty' },
+      { letter: '', state: 'empty' },
+      { letter: '', state: 'empty' },
+      { letter: '', state: 'empty' },
+      { letter: '', state: 'empty' },
+    ];
+
+    const { container: plain } = render(<Row cells={cells} />);
+    expect(plain.firstElementChild?.className).not.toContain('tremor');
+    cleanup();
+
+    const { container: shaking } = render(<Row cells={cells} shake />);
+    expect(shaking.firstElementChild?.className).toContain('tremor');
+  });
+
   it('shows the board in uppercase while leaving the cells it was given untouched', () => {
     const cells: RowCell[] = [
       { letter: 'p', state: 'correct' },

@@ -83,4 +83,43 @@ describe('Board', () => {
     expect(wrapper.hasAttribute('aria-disabled')).toBe(false);
     expect(rowsOf(container)).toHaveLength(6);
   });
+
+  describe('shakeToken', () => {
+    it('does not shake any row when shakeToken is 0 (no rejection yet)', () => {
+      const state = type(make(), 'TERRA');
+      const { container } = render(<Board state={state} boardIndex={0} shakeToken={0} />);
+
+      const rows = rowsOf(container);
+      for (const row of rows) expect(row.className).not.toContain('tremor');
+    });
+
+    it('shakes only the active row, not a scored row or an empty padding row', () => {
+      const state = type(make(), 'TERRA'); // row 0 scored, row 1 is the active draft
+      const { container } = render(<Board state={state} boardIndex={0} shakeToken={1} />);
+
+      const rows = rowsOf(container);
+      expect(rows[0]!.className).not.toContain('tremor'); // scored, not active
+      expect(rows[1]!.className).toContain('tremor'); // the active draft row
+      for (const row of rows.slice(2)) expect(row.className).not.toContain('tremor');
+    });
+
+    it('never shakes a solved board — it has no active row', () => {
+      const state = type(make(), 'CASAL'); // solves it
+      const { container } = render(<Board state={state} boardIndex={0} shakeToken={1} />);
+
+      const rows = rowsOf(container);
+      for (const row of rows) expect(row.className).not.toContain('tremor');
+    });
+
+    it('forces a fresh DOM node for the active row on each new shakeToken, so identical consecutive rejections both play', () => {
+      const state = make();
+      const { container, rerender } = render(<Board state={state} boardIndex={0} shakeToken={1} />);
+      const firstNode = rowsOf(container)[0];
+
+      rerender(<Board state={state} boardIndex={0} shakeToken={2} />);
+      const secondNode = rowsOf(container)[0];
+
+      expect(secondNode).not.toBe(firstNode);
+    });
+  });
 });

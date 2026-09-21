@@ -8,6 +8,14 @@ export interface RowCell {
 
 export interface RowProps {
   readonly cells: readonly RowCell[];
+  /**
+   * True for one shake animation on the active row, in response to a
+   * REJECTED effect (see MatchProvider.tsx's shakeToken). Applied as a
+   * plain extra class on this component's own root — never a second
+   * wrapper element — so it does not disturb the DOM shape
+   * Board.test.tsx's `rowsOf` selector depends on.
+   */
+  readonly shake?: boolean;
 }
 
 /**
@@ -22,9 +30,9 @@ export interface RowProps {
  * (filled/empty) row has nothing to reveal, so every tile in it starts
  * from the same, zero, delay.
  */
-export function Row({ cells }: RowProps) {
+export function Row({ cells, shake = false }: RowProps) {
   return (
-    <div className="grid grid-cols-5 gap-2">
+    <div className={shake ? 'grid grid-cols-5 gap-2 tremor' : 'grid grid-cols-5 gap-2'}>
       {cells.map((cell, index) => (
         <Tile
           key={index}

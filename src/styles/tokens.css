@@ -96,6 +96,10 @@
      frame or a disabled animation can never lose a hint. */
   --press-duration: 140ms;
   --reveal-duration: 320ms;
+  /* The rejected-guess row shake. Its own token, not reveal-duration reused,
+     because the two never run together (a rejection never reveals) and a
+     future tuning of one must not silently retune the other. */
+  --shake-duration: 300ms;
   --press-ease: cubic-bezier(0.2, 0.9, 0.25, 1);
 
   /* --- type --------------------------------------------------------- */
@@ -180,5 +184,6 @@
   :root {
     --press-duration: 0ms;
     --reveal-duration: 0ms;
+    --shake-duration: 0ms;
   }
 }

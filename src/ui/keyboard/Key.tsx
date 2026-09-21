@@ -9,16 +9,26 @@ import type { KeyState } from '../../engine/keyboard';
  * in src/index.css. That is the one source of truth Task 15 already got
  * signed off; this file only ever points at it, never re-expresses it.
  *
- * `min-w-11 min-h-11` are pure sizing (the 44px touch-target floor), layered
- * on top of the treatment class the same way src/dev/Showcase.tsx layers
- * `w-9` / `px-4` alongside `.tecla` — geometry, not a second copy of the
- * ink/shadow treatment.
+ * `min-h-11` (the 44px touch-target floor) is constant at every width.
+ * `min-w-*` is not: the full 44px square only from `sm:` (640px) up.
+ * Below that — an actual phone in portrait, not a hypothetical — ten
+ * QWERTY keys at 44px plus even a 4px gap already need 476px, more than
+ * the viewport itself on an iPhone SE (375px) or a 390px iPhone; found by
+ * hand, rendering this exact game at that width, where it overflowed the
+ * whole page horizontally and left "apagar" unreachable without scrolling
+ * the entire app sideways. 30px still clears WCAG's AA target-size minimum
+ * (24px) with room, and the row's own height stays the full 44px, so the
+ * dimension that matters most for a mis-tap between adjacent keys in the
+ * same row — how much of that row's height each key claims — never
+ * shrinks. Layered on top of the treatment class the same way
+ * src/dev/Showcase.tsx layers `w-9` / `px-4` alongside `.tecla` — geometry,
+ * not a second copy of the ink/shadow treatment.
  */
 const SINGLE_STATE_CLASS: Record<KeyState, string> = {
-  unused: 'tecla min-w-11 min-h-11',
-  absent: 'tecla tecla-ausente min-w-11 min-h-11',
-  present: 'tecla tecla-presente min-w-11 min-h-11',
-  correct: 'tecla tecla-certa min-w-11 min-h-11',
+  unused: 'tecla min-w-[30px] min-h-11 sm:min-w-11',
+  absent: 'tecla tecla-ausente min-w-[30px] min-h-11 sm:min-w-11',
+  present: 'tecla tecla-presente min-w-[30px] min-h-11 sm:min-w-11',
+  correct: 'tecla tecla-certa min-w-[30px] min-h-11 sm:min-w-11',
 };
 
 /**

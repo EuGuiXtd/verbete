@@ -233,6 +233,53 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+
+  /*
+   * A rejected guess: the active row shakes once. Plays on mount only —
+   * the caller (Board.tsx, driven by MatchProvider's shakeToken) forces a
+   * fresh DOM node for the active row each time a guess is rejected, via
+   * its React key, so this animation restarts even for two identical
+   * rejections in a row, and never plays for anything else (ordinary
+   * typing never remounts the row).
+   */
+  @keyframes tremor {
+    10%,
+    90% {
+      transform: translateX(-1px);
+    }
+    20%,
+    80% {
+      transform: translateX(2px);
+    }
+    30%,
+    50%,
+    70% {
+      transform: translateX(-4px);
+    }
+    40%,
+    60% {
+      transform: translateX(4px);
+    }
+  }
+
+  .tremor {
+    animation: tremor var(--shake-duration) var(--press-ease);
+  }
+
+  /*
+   * A slip of paper announcing a rejected guess. Same shelf-and-shadow
+   * language as a raised key (.tecla), not a new elevation idiom.
+   */
+  .aviso {
+    background-color: var(--paper-raised);
+    color: var(--ink);
+    border-radius: var(--radius-sheet);
+    padding: 0.6rem 1rem;
+    font-family: var(--font-serif);
+    font-size: var(--text-small);
+    text-align: center;
+    box-shadow: theme('boxShadow.press-out');
+  }
 }
 
 /*

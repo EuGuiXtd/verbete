@@ -7,6 +7,14 @@ import type { RowCell } from './Row';
 export interface BoardProps {
   readonly state: MatchState;
   readonly boardIndex: number;
+  /**
+   * Bumped by MatchProvider once per REJECTED effect (see its `shakeToken`
+   * doc comment), 0 or omitted otherwise. Folded into the active row's own
+   * React key below — not just passed as a boolean — so React remounts
+   * that one row's DOM node on every new token, which is what makes the
+   * CSS shake animation replay even for two identical rejections in a row.
+   */
+  readonly shakeToken?: number;
 }
 
 function emptyCells(): RowCell[] {
@@ -32,7 +40,7 @@ function draftCells(draft: string): RowCell[] {
  * draft row, no empty padding up to `maxAttempts`. That is the whole
  * freeze; there is no separate branch for it.
  */
-export function Board({ state, boardIndex }: BoardProps) {
+export function Board({ state, boardIndex, shakeToken = 0 }: BoardProps) {
   const board = state.boards[boardIndex];
   if (!board) return null;
 
@@ -42,6 +50,10 @@ export function Board({ state, boardIndex }: BoardProps) {
   );
 
   const solved = board.solvedAt !== null;
+  // The draft row's position, fixed before the padding loop below appends
+  // more (identical-looking, all-empty) rows after it. A solved board has
+  // no active row at all.
+  const activeIndex = solved ? -1 : rowCells.length;
   if (!solved) {
     if (rowCells.length < state.maxAttempts) {
       rowCells.push(draftCells(state.draft));
@@ -53,12 +65,20 @@ export function Board({ state, boardIndex }: BoardProps) {
 
   return (
     <div
-      className={solved ? 'flex flex-col gap-2 opacity-60 pointer-events-none' : 'flex flex-col gap-2'}
+      className={solved ? 'flex w-full flex-col gap-2 opacity-60 pointer-events-none' : 'flex w-full flex-col gap-2'}
       aria-disabled={solved ? true : undefined}
     >
-      {rowCells.map((cells, index) => (
-        <Row key={index} cells={cells} />
-      ))}
+      {rowCells.map((cells, index) => {
+        const isActive = index === activeIndex;
+        const shaking = isActive && shakeToken > 0;
+        return (
+          <Row
+            key={shaking ? `active-shake-${String(shakeToken)}` : index}
+            cells={cells}
+            shake={shaking}
+          />
+        );
+      })}
     </div>
   );
 }
