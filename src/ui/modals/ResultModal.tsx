@@ -72,7 +72,15 @@ function VerbeteEntry({ answer }: VerbeteEntryProps) {
   return (
     <article className="border-t border-rule pt-5 first:border-t-0 first:pt-0">
       <h3 className="flex flex-wrap items-baseline gap-x-3">
-        <span className="text-headword font-semibold">{answer}</span>
+        {/*
+          text-display, not text-headword: this is the one word the whole
+          game has been pointed at revealing, set at the same scale the
+          wordmark itself uses (Header.tsx's "ver·be·te") — the reveal
+          should look like the game just told you what its name means, not
+          like a slightly larger version of every other piece of body copy
+          on this sheet.
+        */}
+        <span className="text-display font-semibold leading-none">{answer}</span>
         {definition && definition.abbrev !== '' && (
           <span className="text-body italic text-ghost">{definition.abbrev}</span>
         )}
@@ -178,7 +186,9 @@ export function ResultModal() {
             fechar
           </button>
         </div>
-        <div className="mt-5 space-y-5">
+        {/* The masthead-over-body hairline a printed dictionary page uses — see .folha-regua's own comment in index.css. */}
+        <div className="folha-regua" />
+        <div className="space-y-6">
           {state.boards.map((board, index) => (
             <VerbeteEntry key={`${String(index)}-${board.answer}`} answer={board.answer} />
           ))}

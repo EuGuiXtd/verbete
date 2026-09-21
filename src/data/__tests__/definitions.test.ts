@@ -10,15 +10,34 @@ describe('definitions.generated.json', () => {
     expect(covered / answerPool().length).toBeGreaterThan(0.8);
   });
 
-  it('never contains the word it defines', () => {
+  it('never contains the word it defines, or a derivational relative of it', () => {
+    // 3, not 4: a 4-letter stem missed "socar" defined as "dar socos em"
+    // ("socos" shares only 3 letters with the stem) — see
+    // scripts/build-dictionary.ts's definitionStem for the measured
+    // comparison that led to shortening this. Every definition actually
+    // shipped is already held to this exact same check at build time
+    // (spoilsAnswer/assertDefinitionDoesNotSpoil); this test exists so a
+    // regression that widens the stem back to 4 fails here too, on the
+    // committed data, independent of the build script.
     for (const [word, definition] of Object.entries(definitions)) {
-      expect(normalize(definition as string)).not.toContain(normalize(word).slice(0, 4));
+      expect(normalize(definition as string)).not.toContain(normalize(word).slice(0, 3));
     }
   });
 
   it('stays short', () => {
     for (const definition of Object.values(definitions)) {
       expect((definition as string).length).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('never leaks "socos" for "socar" — the derivational-relative case review caught', () => {
+    // Named regression for the specific example the review found: a 4-char
+    // stem let "socar" ship with Wiktionary's own first sense, "dar socos
+    // em", because "socos" only shares 3 letters with the stem "soca". If
+    // this key is present at all, it must not be that sense.
+    const definition = (definitions as Record<string, string>).socar;
+    if (definition !== undefined) {
+      expect(normalize(definition)).not.toContain('SOC');
     }
   });
 

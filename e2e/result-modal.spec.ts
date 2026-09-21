@@ -49,7 +49,7 @@ test.describe('the end-of-match reveal', () => {
     await expect(link).toHaveAttribute('href', `https://pt.wiktionary.org/wiki/${text ?? ''}`);
   });
 
-  test('the close control actually closes it, and Escape does too', async ({ page }) => {
+  test('the "fechar" control actually closes it', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
@@ -63,6 +63,27 @@ test.describe('the end-of-match reveal', () => {
     await expect(dialog).toBeVisible();
 
     await page.getByRole('button', { name: /fechar/i }).click();
+    await expect(dialog).toBeHidden();
+  });
+
+  test('pressing Escape closes it too', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
+
+    for (const word of GUESSES) {
+      await page.keyboard.type(word);
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(500);
+    }
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+
+    // Not a click on any element — a bare keypress, exercising
+    // ResultModal's own `document`-level "Escape" listener, which is
+    // otherwise unexercised by every other test in this file (they only
+    // ever close it, when they close it at all, via the "fechar" button).
+    await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
   });
 });

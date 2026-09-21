@@ -342,9 +342,36 @@ function posAbbreviation(entry: WiktionaryEntry): string {
   }
 }
 
-/** The first four normalized letters of `word` — the same substring a player would already recognize mid-guess. */
+/**
+ * The first three normalized letters of `word` — the substring shared with
+ * its derivational relatives, not just its own literal spelling.
+ *
+ * Shortened from 4 to 3 after review: a 4-letter stem is blind to a
+ * derivational relative one letter shorter than the answer itself —
+ * "socar" (stem "SOCA") was defined by Wiktionary's own first sense as
+ * "dar socos em" ("socos" shares only "SOC" with the stem, not all four
+ * letters), which sailed past the 4-letter check and handed a Portuguese
+ * speaker the answer outright. Measured against the real, final answer
+ * list (see this task's report for the full comparison): a 3-letter
+ * substring check catches this and every case the 4-letter check already
+ * caught, at a coverage cost of 3.7 points (95.0% -> 91.3% of answers
+ * getting a definition at all) — comfortably clear of the ~85% floor below
+ * which the trade would need to be made deliberately rather than shipped.
+ * A token-aligned "shared prefix with a whole gloss word" rule was also
+ * measured and rejected: it scored marginally higher coverage (91.8%) but
+ * is NOT a superset of this check's rejections — it missed real cases in
+ * this exact dataset where the stem appears right after an unrelated
+ * word's own leading letters (e.g. "aos DEMAIS" contains "MAI", the stem of
+ * "maior", but "demais" itself doesn't start with it), which is
+ * structurally the same shape of miss as a "re-"/"des-"-prefixed
+ * derivational relative would produce. A plain substring check has no such
+ * blind spot: if the stem appears anywhere in the definition, at any
+ * boundary, it is rejected. Going shorter than 3 (measured: 2) drops
+ * coverage to 84.8%, under the floor, for negligible additional safety —
+ * not worth it.
+ */
 function definitionStem(word: string): string {
-  return normalize(word).slice(0, 4);
+  return normalize(word).slice(0, 3);
 }
 
 /** True if `definition` contains `word`'s own stem — see assertDefinitionDoesNotSpoil. */

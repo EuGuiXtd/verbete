@@ -134,7 +134,8 @@ not `unmunch`).
 - **Licence:** per the repository's own `README.md`
   (`https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/README.md`, seen
   2026-09-20): "MIT License for code. CC-BY-SA-4.0 for content." This file is content (a
-  generated frequency list), so **CC BY-SA 4.0** applies to it.
+  generated frequency list), so **CC BY-SA 4.0**
+  (<https://creativecommons.org/licenses/by-sa/4.0/>) applies to it.
 - **Download date:** 2026-09-20
 - **Measured size:** 650,066 bytes
 - **Used for:** ranking candidate answers by real-world word frequency when selecting the
@@ -165,7 +166,8 @@ not `unmunch`).
 - **Measured size:** 35,583,192 bytes (~33.9 MB) gzip-compressed; ~331.9 MB uncompressed
   (kaikki-reported; not independently decompressed-and-measured here — `build-dictionary.ts`
   streams the gunzip rather than writing an uncompressed copy to disk).
-- **Licence:** Wiktionary content is **CC BY-SA 4.0** (Wikcionário's stated licence); kaikki's
+- **Licence:** Wiktionary content is **CC BY-SA 4.0**
+  (<https://creativecommons.org/licenses/by-sa/4.0/>, Wikcionário's stated licence); kaikki's
   extraction tooling does not change the licence of the underlying Wiktionary text.
 - **Used for (Task 8, pulled forward from Task 21 by controller ruling):** the head-form
   authority for candidate answers — a word is answer-eligible only if this extract has a
@@ -177,7 +179,7 @@ not `unmunch`).
   decides answer-list membership (Task 8, `answers.generated.ts`) remains build-time only — no
   Wiktionary text is copied into that file, only word strings, same as `pt_br_50k.txt` below.
   **`src/data/definitions.generated.json` (Task 21) is REDISTRIBUTED**: it embeds one shortened
-  gloss per answer (1,536 of 1,617), which is actual Wiktionary sense text and carries the CC BY-
+  gloss per answer (1,476 of 1,617), which is actual Wiktionary sense text and carries the CC BY-
   SA 4.0 obligation `NOTICE.md` documents for it — attribution is given via the result screen's
   link to the specific `https://pt.wiktionary.org/wiki/<word>` article each definition came from.
 - **Fetched automatically:** `scripts/fetch-sources.ts` downloads this file like the other three
@@ -188,17 +190,36 @@ not `unmunch`).
 
 ### Task 21 measured build results
 
-`src/data/definitions.generated.json`: **1,536 of 1,617 answers (95.0%)** got a usable, non-
-spoiling definition; the remaining 81 have none, either because the eligible Wiktionary
-entries for that word had no non-empty gloss, or because every gloss found would have contained
-the answer's own stem (see `assertDefinitionDoesNotSpoil` in `scripts/build-dictionary.ts`) — a
-dropped word stays a fully playable answer, it just gets no definition line at the reveal. Raw
-generated file: 92,256 bytes; **gzip -9: 35,574 bytes** (comfortably inside the ~55–70 KB
-estimate the spec guessed at) — served as its own code-split chunk (Vite's dynamic-`import()`
-output, e.g. `dist/assets/definitions.generated-<hash>.js`), never part of the initial bundle.
-Longest generated value measured at 95 characters (the ~90-character gloss truncation plus its
-part-of-speech prefix), comfortably under the 100-character ceiling `src/data/__tests__/
-definitions.test.ts` checks.
+`src/data/definitions.generated.json`: **1,476 of 1,617 answers (91.3%)** got a usable, non-
+spoiling definition; the remaining 141 have none, either because the eligible Wiktionary entries
+for that word had no non-empty gloss, or because every gloss found would have contained the
+answer's own stem — a dropped word stays a fully playable answer, it just gets no definition
+line at the reveal. Raw generated file: 89,136 bytes; **gzip -9: 34,438 bytes** (comfortably
+inside the ~55–70 KB estimate the spec guessed at) — served as its own code-split chunk (Vite's
+dynamic-`import()` output, e.g. `dist/assets/definitions.generated-<hash>.js`), never part of the
+initial bundle. Longest generated value measured at 95 characters (the ~90-character gloss
+truncation plus its part-of-speech prefix), comfortably under the 100-character ceiling
+`src/data/__tests__/definitions.test.ts` checks.
+
+**Post-review revision (still Task 21):** the spoiler check's stem length was shortened from 4
+to 3 normalized letters after review found it blind to a derivational relative one letter
+shorter than the answer — `socar` shipped defined as "dar socos em" ("socos" shares only 3
+letters, "soc", with the 4-letter stem "soca"). Measured against the same final answer list, in
+`assertDefinitionDoesNotSpoil`'s doc comment in `scripts/build-dictionary.ts`:
+
+| Stem check | Coverage | Catches `socar`? | Notes |
+|---|---|---|---|
+| 4-char substring (original) | 1,536/1,617 = 95.0% | No — the leak that prompted this revision | |
+| 3-char substring (shipped) | 1,476/1,617 = 91.3% | Yes | Strict superset of every other option measured; no observed blind spot in this dataset |
+| 2-char substring | 1,372/1,617 = 84.8% | Yes | Under the ~85% floor for negligible extra safety — rejected |
+| Shared prefix with a whole gloss token, length ≥ 3 | 1,484/1,617 = 91.8% | Yes | Rejected despite slightly higher coverage — misses a case in this exact dataset (`maior` defined via "...aos **demais**...", which contains the stem "mai" mid-token, not at a token's start) that the shipped substring check catches; that miss is the same shape a "re-"/"des-"-prefixed spoiler would produce |
+| Shared prefix with a whole gloss token, length ≥ 4 | 1,539/1,617 = 95.2% | No | Too loose — does not shorten the effective stem at all |
+
+The 3-char substring check was chosen: it satisfies the one hard requirement (never leak), it is
+a strict superset of every other option's rejections measured (nothing it lets through, another
+measured option would have caught), and it keeps the exact same "does the definition contain the
+stem" shape the original check already had — no new tokenization logic, no new edge cases to
+reason about in a place where safety, not cleverness, is the goal.
 
 ## Summary table
 

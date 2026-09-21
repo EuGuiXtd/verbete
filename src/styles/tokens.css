@@ -78,6 +78,17 @@
      shadow is a warm brown-black, not rgba(0,0,0,.1). */
   --shadow-rgb: 58 48 36;
   --highlight-rgb: 255 253 247;
+  /*
+   * The end-of-match reveal's backdrop (.cortina in index.css) — "the room
+   * going dark around it" — needs its own alpha, not --shadow-rgb's shared
+   * one: light mode's paper (#e9e4da) is bright enough that the same 0.5
+   * this project used before Task 21's review read as a light wash, with
+   * the board's own tile colours still legible straight through it. Dark
+   * mode's paper (#1a1815) is already near-black, so the same problem does
+   * not exist there — its own override below stays closer to that original
+   * value, just enough to add depth rather than to fix a legibility bug.
+   */
+  --scrim-alpha: 0.72;
   /* How far a block stands off the sheet, and how far it travels when
      pressed. One number, so the whole shop moves together. */
   --press-depth: 3px;
@@ -155,6 +166,9 @@
 
     --shadow-rgb: 0 0 0;
     --highlight-rgb: 120 110 94;
+    /* Dark's paper is already near-black; a lower alpha here still reads
+       as a real backdrop instead of just adding depth on top of depth. */
+    --scrim-alpha: 0.6;
   }
 }
 
@@ -173,6 +187,7 @@
 
   --shadow-rgb: 0 0 0;
   --highlight-rgb: 120 110 94;
+  --scrim-alpha: 0.6;
 }
 
 /*

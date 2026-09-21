@@ -286,9 +286,24 @@
    * press, not a floating SaaS dialog. `.cortina` is the room going dark
    * around it — the shadow channel token, not a flat black overlay, so it
    * stays warm in both themes the same way every other shadow in this file
-   * does — and `.folha` is the sheet itself: same shelf-and-shadow language
-   * as `.aviso`/`.tecla`, just larger, because this is the one moment the
-   * game hands the player an actual dictionary entry to read.
+   * does. Its alpha is its own token (`--scrim-alpha`, tokens.css), not
+   * `.aviso`/other shadows' shared 0.5: a scrim exists to dim what's behind
+   * it, and light mode's bright paper needs noticeably more of that than
+   * dark mode's already-near-black paper does to actually read as "the
+   * room going dark" rather than a faint wash the board still shows
+   * through — see tokens.css's own comment on `--scrim-alpha` for the
+   * measured before/after.
+   *
+   * `.folha` is the sheet itself — same shelf-and-shadow language as
+   * `.aviso`/`.tecla`, but deliberately NOT sized or weighted like either
+   * of them: this is the one moment the game hands the player an actual
+   * dictionary entry, the payoff every other screen has been pointed at,
+   * and it needs to read as an event, not as a bigger toast. Generous
+   * padding gives it presence independent of how short the shown
+   * definition happens to be; the hairline rule below its title (see the
+   * `.folha-regua` div ResultModal.tsx renders) is the same masthead-over-
+   * body separation a printed dictionary page uses, not a decoration
+   * borrowed from a component that has nothing to do with the metaphor.
    */
   .cortina {
     position: fixed;
@@ -298,7 +313,7 @@
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    background-color: rgb(var(--shadow-rgb) / 0.5);
+    background-color: rgb(var(--shadow-rgb) / var(--scrim-alpha));
   }
 
   .folha {
@@ -309,8 +324,14 @@
     background-color: var(--paper-raised);
     color: var(--ink);
     border-radius: var(--radius-sheet);
-    padding: 1.75rem;
+    padding: 2.25rem 2rem;
     box-shadow: theme('boxShadow.press-out');
+  }
+
+  .folha-regua {
+    margin-top: 1.25rem;
+    margin-bottom: 1.5rem;
+    border-top: 1px solid var(--rule);
   }
 }
 

@@ -35,7 +35,7 @@ permits. No specific MPL version is asserted.
 
 Added by Task 21. `src/data/definitions.generated.json` (produced by `pnpm dict:build` from
 `scripts/build-dictionary.ts`, sourced from `data/raw/ptwiktionary.jsonl.gz`) contains a short
-definition for 1,536 of this game's 1,617 answers — the ~5% with no usable, non-spoiling gloss
+definition for 1,476 of this game's 1,617 answers (91.3%) — the rest have no usable, non-spoiling gloss
 (see "Adaptation made" below) are simply absent from the file, never from the answer list itself.
 The file name differs from what this block originally announced (`data/definicoes.json`): it
 ships under `src/data/` instead, as a plain JSON module the game loads via a dynamic `import()`
@@ -54,7 +54,8 @@ characters on a word boundary, and prefixed with a part-of-speech abbreviation (
 many the real entry has, shortened to fit a result screen — an adaptation, not a reproduction of
 the entry.
 
-**Licence:** Wiktionary content is licensed under **CC BY-SA 4.0**.
+**Licence:** Wiktionary content is licensed under **CC BY-SA 4.0**
+(<https://creativecommons.org/licenses/by-sa/4.0/>).
 `src/data/definitions.generated.json` is a derivative work of Wikcionário content and is
 distributed under the same licence. Attribution is given in the product itself, not only in this
 file: the result screen that shows each definition links directly to
