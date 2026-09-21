@@ -17,15 +17,20 @@
  *                                 sheet, letter in --ghost
  *
  * The three states are therefore separated by VALUE, not only by hue —
- * dark / mid / paper. Measured (8-bit grey after a greyscale pass):
+ * dark / mid / paper. Measured (8-bit grey, luma on the GAMMA-ENCODED sRGB
+ * bytes — i.e. the same weights the browser's own `filter: grayscale()`
+ * uses, not a linear-light conversion):
  *
- *   light:  ink 27   ink-red 102   paper 228
- *   dark:   ink 231  ink-red 125   paper 24
+ *   light:  ink 27   ink-red 84    paper 228
+ *   dark:   ink 231  ink-red 118   paper 24
  *
  * That separation is what buys colour accessibility without a second
  * "colour-blind palette", and it is the thing that makes this game not look
  * like every other Wordle clone. If you change --ink or --ink-red, re-run the
- * greyscale check in .superpowers/sdd/2026-09-20-verbete/design/ first.
+ * greyscale check in .superpowers/sdd/2026-09-20-verbete/design/ first — with
+ * `filter: grayscale()` luma, the method above, not a linear-light one (they
+ * disagree by ~18 grey levels on --ink-red and will send you chasing a
+ * mismatch that isn't there).
  *
  * Contrast floors this palette holds (see the task-15 report for the table):
  *   --ink on --paper            >= 13:1
@@ -46,8 +51,12 @@
   --paper-raised: #f1ede5;
   /* An empty slot in the composing stick — pressed, never inked. */
   --paper-recess: #ded7ca;
-  /* What a letter is knocked out in: the sheet showing through the ink. */
-  --knockout: #e9e4da;
+  /* What a letter is knocked out in: the sheet showing through the ink.
+     One 8-bit notch lighter than --paper (#e9e4da) — invisible to the eye,
+     but --paper landed at 4.4981:1 on --ink-red, just under the 4.5:1 this
+     file commits to. Nudging --knockout instead of --ink-red keeps
+     --ink-red vs --ink (only 3.01:1, its own thin floor) untouched. */
+  --knockout: #e9e5da;
 
   /* --- ink ---------------------------------------------------------- */
   /* Printer's black, warm — R > G > B, never a neutral #222. */
@@ -105,6 +114,18 @@
  * inked block is now the brightest thing on the page, because what you are
  * looking at is polished type catching the lamp, and the un-inked sheet has
  * become the dark bed underneath.
+ *
+ * --ink-red is deliberately less saturated here than a straight hue-rotate
+ * of the light value would give (48% vs 64%). On a near-black bed, a fully
+ * saturated red picks up a Helmholtz–Kohlrausch boost — it reads brighter
+ * than its luminance says — and was competing with the cream --ink block
+ * for "heaviest thing on the tile" instead of ranking under it. Luminance
+ * alone had almost no room to move here: --knockout on --ink-red was
+ * already at 4.56:1 against a 4.5:1 floor, so darkening the old, vivid
+ * #d84d57 to buy separation would have clipped that floor almost
+ * immediately. Desaturating toward #c76066 fixes the rank the eye actually
+ * sees while giving the contrast floors *more* headroom, not less (see the
+ * task-15 report for the full before/after table).
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -116,7 +137,7 @@
     --knockout: #131210;
 
     --ink: #ede7da;
-    --ink-red: #d84d57;
+    --ink-red: #c76066;
     --ghost: #8f8779;
     --rule: #38332c;
 
@@ -134,7 +155,7 @@
   --knockout: #131210;
 
   --ink: #ede7da;
-  --ink-red: #d84d57;
+  --ink-red: #c76066;
   --ghost: #8f8779;
   --rule: #38332c;
 
