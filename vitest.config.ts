@@ -6,6 +6,7 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['src/ui/**', 'jsdom'],
       ['src/state/**', 'jsdom'],
+      ['src/storage/**', 'jsdom'],
     ],
   },
 });
