@@ -5,6 +5,8 @@ import { MatchProvider } from '../MatchProvider';
 import { useMatch } from '../useMatch';
 import { dayKeyOf } from '../../engine/clock';
 import { loadHistory, loadProgress, loadStats, saveProgress } from '../../storage/repository';
+import { progressKey } from '../../storage/keys';
+import type { Mode, Variant } from '../../engine/types';
 
 // A small, deterministic stand-in for the real 1500-word daily pool — must
 // be genuinely distinct entries: dailyAnswers's real (unmocked) dedup loop
@@ -13,7 +15,18 @@ const DAILY_POOL = Array.from({ length: 20 }, (_, i) => `w${String(i).padStart(4
 
 let infiniteAnswerIndex = 0;
 const infiniteAnswers = ['casal', 'terra', 'prato', 'findo', 'claro'];
-const VALID_GUESSES = new Set(['CASAL', 'TERRA', 'PRATO', 'FINDO', 'CLARO']);
+const DEFAULT_VALID_GUESSES = ['CASAL', 'TERRA', 'PRATO', 'FINDO', 'CLARO'];
+const VALID_GUESSES = new Set(DEFAULT_VALID_GUESSES);
+
+/**
+ * Writes a record straight to the raw storage envelope, bypassing
+ * `saveProgress`'s `ProgressRecord` type entirely — this is what a genuinely
+ * corrupt or hand-edited localStorage value looks like, not something
+ * TypeScript would ever let a caller construct through the normal API.
+ */
+function saveRawProgress(variant: Variant, mode: Mode, data: Record<string, unknown>): void {
+  localStorage.setItem(progressKey(variant, mode), JSON.stringify({ v: 1, data }));
+}
 
 vi.mock('../../data/dictionary', () => ({
   isValidGuess: (word: string) => VALID_GUESSES.has(word),
@@ -51,6 +64,10 @@ afterEach(() => {
   document.documentElement.style.removeProperty('--reveal-duration');
   document.documentElement.style.removeProperty('--press-duration');
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+  // Restored, not just left cleared: 'does not un-finish...' below clears
+  // this mid-test to simulate a shrunk dictionary.
+  VALID_GUESSES.clear();
+  for (const word of DEFAULT_VALID_GUESSES) VALID_GUESSES.add(word);
 });
 
 describe('MatchProvider persistence', () => {
@@ -207,5 +224,61 @@ describe('MatchProvider persistence', () => {
     expect(loadStats('solo', 'infinito').wins).toBe(1);
     expect(loadHistory()).toHaveLength(1);
     expect(loadHistory()[0]).toMatchObject({ variant: 'solo', mode: 'infinito', won: true, attempts: 1 });
+  });
+
+  it('does not un-finish a won match on replay, even if the dictionary would now reject the winning guess', () => {
+    const first = renderHook(() => useMatch(), { wrapper });
+    typeWord(first.result, 'CASAL'); // the first mocked answer — wins on the first guess
+    act(() => {
+      first.result.current.submit();
+    });
+    expect(first.result.current.state.status).toBe('won');
+    first.unmount();
+
+    // Simulates a dictionary rebuild that would reject this exact guess
+    // today. If replay re-validated history against isValidGuess (the bug
+    // the reviewer traced beyond "drops a guess"): submit() would REJECT
+    // "CASAL" instead of accepting it, the board would never be marked
+    // solved, and this won match would come back from reload as "playing"
+    // — missing its winning row entirely.
+    VALID_GUESSES.clear();
+
+    const second = renderHook(() => useMatch(), { wrapper });
+    expect(second.result.current.state.status).toBe('won');
+    expect(second.result.current.state.guesses).toEqual(['CASAL']);
+    expect(second.result.current.state.boards[0]?.solvedAt).toBe(0);
+  });
+
+  describe('a malformed record fails safe instead of crashing', () => {
+    const base = {
+      variant: 'solo' as const,
+      mode: 'infinito' as const,
+      dayKey: null,
+      draft: '',
+      answers: ['casal'],
+      answersHash: 'irrelevant-for-infinite-restore',
+      startedAt: 1,
+      finishedAt: null,
+    };
+
+    it.each([
+      ['guesses is null — not iterable, the actual pre-fix crash', null],
+      ['guesses is a number — not iterable, the actual pre-fix crash', 42],
+      ['guesses holds a non-string element', [123]],
+      ['a guess is the wrong length', ['CA']],
+      ['a guess has lowercase letters', ['casal']],
+    ])('%s', (_label, guesses) => {
+      saveRawProgress('solo', 'infinito', { ...base, guesses });
+
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      // Falls back to a fresh match rather than throwing during render —
+      // this render succeeding at all is the assertion for the two
+      // non-iterable cases, which would otherwise throw inside
+      // replayMatch's `for...of` before any of these expectations ran.
+      expect(result.current.state.status).toBe('playing');
+      expect(result.current.state.guesses).toEqual([]);
+      expect(result.current.state.draft).toBe('');
+    });
   });
 });

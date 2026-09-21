@@ -1,5 +1,7 @@
 import { useTheme } from '../../state/useTheme';
 import type { ThemeChoice } from '../../state/useTheme';
+import { blurOnMouseActivation } from '../blurOnMouseActivation';
+import type { MouseEvent } from 'react';
 
 const NEXT_THEME: Record<ThemeChoice, ThemeChoice> = {
   system: 'light',
@@ -62,7 +64,8 @@ export function Header() {
           type="button"
           className="tecla px-3"
           aria-label={`Tema: ${THEME_LABEL[theme]}. Toque para alternar.`}
-          onClick={() => {
+          onClick={(event: MouseEvent<HTMLButtonElement>) => {
+            blurOnMouseActivation(event);
             setTheme(NEXT_THEME[theme]);
           }}
         >

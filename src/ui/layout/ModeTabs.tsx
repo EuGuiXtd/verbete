@@ -1,5 +1,7 @@
 import { MODES, MODE_LABEL, VARIANT_LABEL, VARIANT_ORDER } from '../../engine/constants';
 import { useMatch } from '../../state/useMatch';
+import { blurOnMouseActivation } from '../blurOnMouseActivation';
+import type { MouseEvent } from 'react';
 
 type TabSelection = 'selected' | 'unselected';
 
@@ -37,7 +39,8 @@ export function ModeTabs() {
               type="button"
               aria-pressed={active.variant === variant}
               className={TAB_CLASS[active.variant === variant ? 'selected' : 'unselected']}
-              onClick={() => {
+              onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                blurOnMouseActivation(event);
                 selectMode(variant, active.mode);
               }}
             >
@@ -52,7 +55,8 @@ export function ModeTabs() {
               type="button"
               aria-pressed={active.mode === mode}
               className={TAB_CLASS[active.mode === mode ? 'selected' : 'unselected']}
-              onClick={() => {
+              onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                blurOnMouseActivation(event);
                 selectMode(active.variant, mode);
               }}
             >
@@ -68,7 +72,15 @@ export function ModeTabs() {
           </span>
         )
       ) : (
-        <button type="button" className="tecla px-3" onClick={newMatch} aria-label="Começar uma nova palavra">
+        <button
+          type="button"
+          className="tecla px-3"
+          onClick={(event: MouseEvent<HTMLButtonElement>) => {
+            blurOnMouseActivation(event);
+            newMatch();
+          }}
+          aria-label="Começar uma nova palavra"
+        >
           nova palavra
         </button>
       )}

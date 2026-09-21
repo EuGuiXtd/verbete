@@ -3,11 +3,13 @@ import { MatchProvider } from './state/MatchProvider';
 import { useMatch } from './state/useMatch';
 import { usePhysicalKeyboard } from './state/usePhysicalKeyboard';
 import { Board } from './ui/board/Board';
+import { blurOnMouseActivation } from './ui/blurOnMouseActivation';
 import { ToastHost } from './ui/feedback/ToastHost';
 import { Header } from './ui/layout/Header';
 import { ModeTabs } from './ui/layout/ModeTabs';
 import { Shell } from './ui/layout/Shell';
 import { Keyboard } from './ui/keyboard/Keyboard';
+import type { MouseEvent } from 'react';
 
 /**
  * The end-of-match status line. No result modal in this task's scope (Task
@@ -43,7 +45,14 @@ function DailyRolloverBanner() {
   return (
     <div className="aviso flex w-full flex-col items-center gap-2" role="status">
       <p>Chegou o verbete de hoje</p>
-      <button type="button" className="tecla px-4" onClick={applyDailyRollover}>
+      <button
+        type="button"
+        className="tecla px-4"
+        onClick={(event: MouseEvent<HTMLButtonElement>) => {
+          blurOnMouseActivation(event);
+          applyDailyRollover();
+        }}
+      >
         jogar
       </button>
     </div>

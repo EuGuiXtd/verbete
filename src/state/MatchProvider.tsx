@@ -12,7 +12,7 @@ import { createMatch, reduce } from '../engine/match';
 import type { Action, Effect, InvalidReason, MatchState } from '../engine/match';
 import { dayKeyOf, epochDayOf } from '../engine/clock';
 import { dailyAnswers, dailyNumber as computeDailyNumber } from '../engine/daily';
-import { VARIANTS, VARIANT_ORDER } from '../engine/constants';
+import { VARIANTS, VARIANT_ORDER, WORD_LENGTH } from '../engine/constants';
 import type { Mode, Variant } from '../engine/types';
 import { dailyPool, isValidGuess, pickRandomAnswer } from '../data/dictionary';
 import { appendHistory, loadProgress, saveProgress } from '../storage/repository';
@@ -113,6 +113,32 @@ function currentDailyAnswers(variant: Variant, dayKey: string): { answers: reado
   return { answers, hash: computeAnswersHash(answers) };
 }
 
+/** Matches exactly `WORD_LENGTH` uppercase A–Z letters — the one shape replay depends on. */
+const GUESS_PATTERN = new RegExp(`^[A-Z]{${String(WORD_LENGTH)}}$`);
+
+/**
+ * The structural property `replayMatch` actually depends on: `guesses` is
+ * an array, and every entry is a string of exactly `WORD_LENGTH` uppercase
+ * letters. Checked at load time, before a record is ever handed to
+ * `replayMatch`, for two reasons:
+ *
+ * 1. A malformed record — `guesses` not an array, or holding something
+ *    that is not a string — would otherwise throw inside `replayMatch`'s
+ *    `for...of`, during a reducer call. That is a render-time crash, not a
+ *    caught, discard-and-fall-back failure the way every other storage
+ *    read in this codebase behaves. This check runs first specifically so
+ *    a corrupt or hand-edited record is discarded instead of ever reaching
+ *    that loop.
+ * 2. It is also what makes it safe for `replayMatch` to skip dictionary
+ *    validation entirely (see that function's doc comment) — this is the
+ *    ONE property replay still needs from a stored guess, checked here
+ *    instead of by re-consulting a dictionary that can legitimately change
+ *    under a saved game.
+ */
+function hasReplayableGuesses(guesses: unknown): guesses is readonly string[] {
+  return Array.isArray(guesses) && guesses.every((guess) => typeof guess === 'string' && GUESS_PATTERN.test(guess));
+}
+
 /**
  * Rebuilds a `MatchState` by folding the engine's own `reduce` over a stored
  * guess list — the exact same function every live guess already goes
@@ -126,9 +152,25 @@ function currentDailyAnswers(variant: Variant, dayKey: string): { answers: reado
  *
  * Each historical guess is replayed by writing it into `draft` and reducing
  * a `SUBMIT`, not by hand-rolling a second copy of the win/lose/solvedAt
- * bookkeeping `submit()` in engine/match.ts already owns. `deps.now` only
- * matters if a replayed guess finishes the match; the `finishedAt` the
- * player actually experienced is restored afterwards from
+ * bookkeeping `submit()` in engine/match.ts already owns.
+ *
+ * Replay deliberately passes `isValidGuess: () => true` rather than the
+ * real dictionary check: these guesses were valid when they were played,
+ * and `isValidGuess` exists to reject a *new* guess, not to re-litigate the
+ * past. Re-validating a historical guess against today's dictionary is
+ * actively dangerous, not merely redundant — the dictionary is a build
+ * artifact that can legitimately change under a saved game (a word dropped
+ * from the guess table), and if that word happened to be the one that WON
+ * the match, `submit()` would reject it (a discarded REJECTED effect, since
+ * replay never surfaces effects), the board would never be marked solved,
+ * and a match the player actually won would come back from reload as still
+ * "playing" — missing its winning row entirely. `hasReplayableGuesses`
+ * (called by every caller of this function, before it's ever called) is
+ * what replay actually needs instead: proof each guess is `WORD_LENGTH`
+ * uppercase letters, a property that cannot drift with the word list.
+ *
+ * `deps.now` only matters if a replayed guess finishes the match; the
+ * `finishedAt` the player actually experienced is restored afterwards from
  * `record.finishedAt` rather than trusted from the replay, since the replay
  * runs at reload time, not at the moment the match actually ended.
  */
@@ -141,7 +183,7 @@ function replayMatch(record: ProgressRecord, answers: readonly string[]): MatchS
     startedAt: record.startedAt,
   });
   for (const guess of record.guesses) {
-    state = reduce({ ...state, draft: guess }, { type: 'SUBMIT' }, { isValidGuess, now: Date.now }).state;
+    state = reduce({ ...state, draft: guess }, { type: 'SUBMIT' }, { isValidGuess: () => true, now: Date.now }).state;
   }
   if (state.status !== 'playing') {
     return record.finishedAt != null ? { ...state, finishedAt: record.finishedAt } : state;
@@ -160,7 +202,13 @@ function replayMatch(record: ProgressRecord, answers: readonly string[]): MatchS
  */
 function loadOrCreateDaily(variant: Variant, dayKey: string): MatchState {
   const record = loadProgress(variant, 'diario');
-  if (record !== null && record.variant === variant && record.mode === 'diario' && record.dayKey === dayKey) {
+  if (
+    record !== null &&
+    record.variant === variant &&
+    record.mode === 'diario' &&
+    record.dayKey === dayKey &&
+    hasReplayableGuesses(record.guesses)
+  ) {
     const { answers, hash } = currentDailyAnswers(variant, dayKey);
     if (hash === record.answersHash) return replayMatch(record, answers);
   }
@@ -181,7 +229,8 @@ function loadOrCreateInfinite(variant: Variant, exclude: ReadonlySet<string>): M
     record.variant === variant &&
     record.mode === 'infinito' &&
     record.answers !== null &&
-    record.answers.length === VARIANTS[variant].boards
+    record.answers.length === VARIANTS[variant].boards &&
+    hasReplayableGuesses(record.guesses)
   ) {
     return replayMatch(record, record.answers);
   }
