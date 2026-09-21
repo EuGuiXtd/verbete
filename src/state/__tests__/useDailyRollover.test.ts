@@ -8,6 +8,7 @@ import { useDailyRollover } from '../useDailyRollover';
 const START = Date.UTC(2026, 8, 21, 2, 59, 0);
 const TODAY = '2026-09-20';
 const TOMORROW = '2026-09-21';
+const DAY_AFTER_TOMORROW = '2026-09-22';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -37,6 +38,28 @@ describe('useDailyRollover', () => {
 
     expect(onNewDay).toHaveBeenCalledTimes(1);
     expect(onNewDay).toHaveBeenCalledWith(TOMORROW);
+  });
+
+  it('re-arms after firing, so a second midnight crossing is also caught by the timer alone', () => {
+    // No visibilitychange/focus is ever dispatched in this test — if the
+    // timer only fired once at mount (the bug this guards against), the
+    // second crossing below would have nothing left to catch it.
+    const onNewDay = vi.fn();
+    renderHook(() => useDailyRollover(onNewDay));
+
+    act(() => {
+      vi.advanceTimersByTime(61_000); // first crossing, into TOMORROW
+    });
+    expect(onNewDay).toHaveBeenCalledTimes(1);
+    expect(onNewDay).toHaveBeenNthCalledWith(1, TOMORROW);
+
+    act(() => {
+      // 25h clears any single day's next-midnight distance (msUntilNextMidnight
+      // is always <=24h) with the same 1h margin the hook itself budgets.
+      vi.advanceTimersByTime(25 * 60 * 60 * 1000);
+    });
+    expect(onNewDay).toHaveBeenCalledTimes(2);
+    expect(onNewDay).toHaveBeenNthCalledWith(2, DAY_AFTER_TOMORROW);
   });
 
   it('fires on visibilitychange when the day changed while the tab was hidden, without waiting for the timer', () => {

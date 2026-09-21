@@ -27,6 +27,20 @@ import { dayKeyOf, msUntilNextMidnight } from '../engine/clock';
  * it that depends on props), so a caller passing a fresh arrow function
  * every render — as MatchProvider effectively could — does not tear down
  * and rearm the midnight timer and the two listeners on every render.
+ *
+ * The timer re-arms itself every time `check` runs, not just once at
+ * mount: `msUntilNextMidnight(Date.now())` is recomputed and a fresh
+ * `setTimeout` scheduled on every call, whether `check` was invoked by the
+ * timer firing or by `visibilitychange`/`focus`. Firing it only once would
+ * quietly reduce this to a two-trigger design after the first night —
+ * exactly the gap neither `visibilitychange` nor `focus` covers: a tab
+ * that stays continuously visible and focused straight through every
+ * later midnight (a kiosk display, a desktop player who never alt-tabs)
+ * would get no timer contribution at all past day one. `timer` is
+ * cleared before every re-arm, including inside `check` itself — not just
+ * on unmount — so an early trigger (visibilitychange/focus firing before
+ * the scheduled deadline) cancels the now-stale pending timeout instead of
+ * leaving it to fire redundantly alongside the freshly armed one.
  */
 export function useDailyRollover(onNewDay: (dayKey: string) => void): void {
   const dayKeyRef = useRef(dayKeyOf(Date.now()));
@@ -34,15 +48,23 @@ export function useDailyRollover(onNewDay: (dayKey: string) => void): void {
   onNewDayRef.current = onNewDay;
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+
+    const arm = () => {
+      timer = setTimeout(check, msUntilNextMidnight(Date.now()) + 1000);
+    };
+
     const check = () => {
       const current = dayKeyOf(Date.now());
       if (current !== dayKeyRef.current) {
         dayKeyRef.current = current;
         onNewDayRef.current(current);
       }
+      clearTimeout(timer);
+      arm();
     };
 
-    const timer = setTimeout(check, msUntilNextMidnight(Date.now()) + 1000);
+    arm();
     document.addEventListener('visibilitychange', check);
     window.addEventListener('focus', check);
 
