@@ -15,6 +15,7 @@ const infiniteAnswers = ['casal', 'terra', 'prato', 'findo', 'claro', 'muito', '
 vi.mock('../../../data/dictionary', () => ({
   isValidGuess: () => true,
   dailyPool: () => DAILY_POOL,
+  DICTIONARY_VERSION: 'test-fixture',
   pickRandomAnswer: () => {
     const answer = infiniteAnswers[infiniteAnswerIndex % infiniteAnswers.length]!;
     infiniteAnswerIndex += 1;

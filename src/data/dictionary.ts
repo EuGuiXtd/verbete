@@ -1,7 +1,17 @@
 import { containsWord, unpackWords } from './codec';
 import { GUESSES_B64, GUESSES_COUNT } from './guesses.generated';
-import { ANSWERS } from './answers.generated';
+import { ANSWERS, DICTIONARY_VERSION } from './answers.generated';
 import { DAILY_POOL_SIZE } from '../engine/constants';
+
+/**
+ * A fingerprint of the exact `ANSWERS` array the running bundle was built
+ * with — see `hashAnswers`'s doc comment in scripts/build-dictionary.ts for
+ * why this exists (a stale service worker's word list, made detectable
+ * rather than silently wrong). Re-exported through this facade rather than
+ * importing `answers.generated` directly elsewhere, matching how every
+ * other generated-file symbol in this module is already consumed.
+ */
+export { DICTIONARY_VERSION };
 
 let table: Int32Array | null = null;
 

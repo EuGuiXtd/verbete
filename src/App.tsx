@@ -10,6 +10,7 @@ import { ModeTabs } from './ui/layout/ModeTabs';
 import { Shell } from './ui/layout/Shell';
 import { Keyboard } from './ui/keyboard/Keyboard';
 import { ResultModal } from './ui/modals/ResultModal';
+import { UpdatePrompt } from './ui/feedback/UpdatePrompt';
 import type { MouseEvent } from 'react';
 
 /**
@@ -92,6 +93,12 @@ function App() {
   return (
     <MatchProvider>
       <GameScreen />
+      {/*
+        Outside MatchProvider's own UI, deliberately: an update is a
+        page-level event, not tied to whichever variant/mode is on screen.
+        See UpdatePrompt's own doc comment for why this exists.
+      */}
+      <UpdatePrompt />
     </MatchProvider>
   );
 }

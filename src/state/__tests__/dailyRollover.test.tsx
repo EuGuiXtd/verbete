@@ -13,6 +13,7 @@ vi.mock('../../data/dictionary', () => ({
   isValidGuess: () => true,
   dailyPool: () => DAILY_POOL,
   pickRandomAnswer: () => 'casal',
+  DICTIONARY_VERSION: 'test-fixture',
 }));
 
 function wrapper({ children }: { children: ReactNode }) {

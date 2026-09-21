@@ -24,6 +24,15 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     trace: 'retain-on-failure',
+    // A registered service worker is a chronic source of Playwright flake:
+    // it caches between runs, races its own registration against
+    // navigation, and produces failures that look like product bugs in
+    // every one of these specs, none of which is testing PWA behaviour.
+    // Blocked here, at the context level, for every spec by default;
+    // e2e/pwa-offline.spec.ts — the one spec whose entire point IS the
+    // service worker — opts back in with its own `test.use({ serviceWorkers:
+    // 'allow' })`.
+    serviceWorkers: 'block',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {

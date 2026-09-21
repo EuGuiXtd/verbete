@@ -14,7 +14,7 @@ import { dayKeyOf, epochDayOf } from '../engine/clock';
 import { dailyAnswers, dailyNumber as computeDailyNumber } from '../engine/daily';
 import { VARIANTS, VARIANT_ORDER, WORD_LENGTH } from '../engine/constants';
 import type { Mode, Variant } from '../engine/types';
-import { dailyPool, isValidGuess, pickRandomAnswer } from '../data/dictionary';
+import { DICTIONARY_VERSION, dailyPool, isValidGuess, pickRandomAnswer } from '../data/dictionary';
 import { appendHistory, loadProgress, saveProgress } from '../storage/repository';
 import { computeAnswersHash } from '../storage/schema';
 import type { ProgressRecord } from '../storage/schema';
@@ -594,6 +594,10 @@ export function MatchProvider({ children }: MatchProviderProps) {
             // a word they learned; without this the history log would have
             // nothing to show but a date and a score.
             answers: activeMatch.boards.map((board) => board.answer),
+            // Task 24: stamps which build's word list produced this match,
+            // so a stale-service-worker mismatch is detectable after the
+            // fact rather than silent. See HistoryEntry's doc comment.
+            dictionaryVersion: DICTIONARY_VERSION,
           });
           saveProgress(toProgressRecord(slice.active, activeMatch));
           break;

@@ -18,6 +18,7 @@ vi.mock('../../data/dictionary', () => ({
     answerIndex += 1;
     return answer;
   },
+  DICTIONARY_VERSION: 'test-fixture',
 }));
 
 function wrapper({ children }: { children: ReactNode }) {

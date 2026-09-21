@@ -44,9 +44,18 @@ test.describe('the end-of-match reveal', () => {
     const text = await headword.textContent();
     expect(text).toBe(text?.toLowerCase());
 
-    // The Wikcionário link is present and points at this exact word.
+    // The Wikcionário link is present and points at this exact word. The
+    // href itself is percent-encoded (see ResultModal.tsx's
+    // encodeURIComponent(answer)) — this test found that the hard way: it
+    // was written comparing the raw text, which only failed the run an
+    // unseeded infinite match happened to draw an accented word (e.g.
+    // "dúzia"), because plain ASCII answers round-trip through
+    // encodeURIComponent unchanged and hid the bug the rest of the time.
     const link = dialog.getByRole('link', { name: /wikcionário/i }).first();
-    await expect(link).toHaveAttribute('href', `https://pt.wiktionary.org/wiki/${text ?? ''}`);
+    await expect(link).toHaveAttribute(
+      'href',
+      `https://pt.wiktionary.org/wiki/${encodeURIComponent(text ?? '')}`,
+    );
   });
 
   test('the "fechar" control actually closes it', async ({ page }) => {

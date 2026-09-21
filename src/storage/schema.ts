@@ -56,6 +56,13 @@ export interface ProgressRecord {
  * `hasReplayableAnswers` already applies to a stored `ProgressRecord`)
  * rather than trusting the type checker's compile-time guarantee against
  * data that predates it.
+ *
+ * `dictionaryVersion` (added by Task 24) is `DICTIONARY_VERSION` (see
+ * src/data/dictionary.ts) at the moment this match finished: a fingerprint
+ * of the exact `ANSWERS` array a stale service worker's cached bundle could
+ * otherwise disagree about with nothing to show for it. Optional, not
+ * required, for the same reason `answers` is additive — an entry appended
+ * before this task has no such field on disk.
  */
 export interface HistoryEntry {
   readonly variant: Variant;
@@ -65,6 +72,7 @@ export interface HistoryEntry {
   readonly attempts: number | null;
   readonly finishedAt: number;
   readonly answers: readonly string[];
+  readonly dictionaryVersion?: string;
 }
 
 /**

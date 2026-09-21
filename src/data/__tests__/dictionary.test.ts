@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answerPool, dailyPool, isValidGuess, pickRandomAnswer } from '../dictionary';
+import { DICTIONARY_VERSION, answerPool, dailyPool, isValidGuess, pickRandomAnswer } from '../dictionary';
 import { normalize } from '../../engine/normalize';
 import { DAILY_POOL_SIZE } from '../../engine/constants';
 
@@ -31,6 +31,28 @@ describe('pools', () => {
     // See task-9-report.md for details; do not revert without confirming
     // the data's casing convention has changed.
     expect(answerPool().some((w) => /[ÁÂÃÀÉÊÍÓÔÕÚÇ]/i.test(w))).toBe(true);
+  });
+});
+
+describe('DICTIONARY_VERSION', () => {
+  /**
+   * Independently recomputes the same FNV-1a hash `hashAnswers` in
+   * scripts/build-dictionary.ts computes over `ANSWERS`, so this test fails
+   * if `DICTIONARY_VERSION` is ever hand-edited, stale, or hardcoded to a
+   * placeholder that happens to look like a hash — not just "is a string".
+   */
+  function hashAnswers(answers: readonly string[]): string {
+    const input = answers.join('\u0000');
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < input.length; i += 1) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(16);
+  }
+
+  it('is the FNV-1a fingerprint of the exact answer pool this build shipped', () => {
+    expect(DICTIONARY_VERSION).toBe(hashAnswers(answerPool()));
   });
 });
 

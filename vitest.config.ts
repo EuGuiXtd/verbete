@@ -1,3 +1,4 @@
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 // Directories whose tests touch the DOM (localStorage, window, React
@@ -13,7 +14,37 @@ import { defineConfig } from 'vitest/config';
 // environment split.
 const JSDOM_DIRS = ['src/storage', 'src/ui', 'src/state'];
 
+/**
+ * `src/ui/feedback/UpdatePrompt.tsx` (Task 24) imports `virtual:pwa-register/react`,
+ * a module vite-plugin-pwa only provides for a real build/dev server —
+ * vitest never runs either, so without this the import fails to resolve
+ * before `vi.mock` (in UpdatePrompt.test.tsx) ever gets a chance to
+ * intercept it. The real registration behaviour comes from vite-plugin-pwa
+ * itself and is exercised for real in e2e/pwa-offline.spec.ts (against the
+ * production build), never here — this stub only needs to exist so the
+ * module graph resolves; every test that cares what `useRegisterSW` does
+ * replaces it with its own `vi.mock`.
+ */
+const stubPwaRegisterVirtualModule: Plugin = {
+  name: 'stub-virtual-pwa-register',
+  resolveId(id) {
+    if (id === 'virtual:pwa-register/react') return `\0${id}`;
+  },
+  load(id) {
+    if (id === '\0virtual:pwa-register/react') {
+      return `export function useRegisterSW() {
+        return {
+          needRefresh: [false, () => {}],
+          offlineReady: [false, () => {}],
+          updateServiceWorker: async () => {},
+        };
+      }`;
+    }
+  },
+};
+
 export default defineConfig({
+  plugins: [stubPwaRegisterVirtualModule],
   test: {
     projects: [
       {

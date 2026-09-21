@@ -31,6 +31,7 @@ function saveRawProgress(variant: Variant, mode: Mode, data: Record<string, unkn
 vi.mock('../../data/dictionary', () => ({
   isValidGuess: (word: string) => VALID_GUESSES.has(word),
   dailyPool: () => DAILY_POOL,
+  DICTIONARY_VERSION: 'test-fixture',
   pickRandomAnswer: () => {
     const answer = infiniteAnswers[infiniteAnswerIndex % infiniteAnswers.length]!;
     infiniteAnswerIndex += 1;

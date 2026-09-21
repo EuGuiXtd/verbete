@@ -1641,3 +1641,6 @@ export const ANSWERS: readonly string[] = [
   "borra",
   "varga",
 ];
+
+// See hashAnswers's doc comment in scripts/build-dictionary.ts.
+export const DICTIONARY_VERSION = "a1b55a8d";

@@ -570,6 +570,35 @@ export const GUESSES_COUNT = ${guesses.length};
 `;
 }
 
+/**
+ * A deterministic fingerprint of the exact, ordered `ANSWERS` array —
+ * FNV-1a 32-bit over the words joined by a separator no five-letter answer
+ * can contain, mirroring `computeAnswersHash` in src/storage/schema.ts (kept
+ * as a separate implementation rather than imported, since this script has
+ * no dependency on src/storage/).
+ *
+ * This is the "version the generated data" half of Task 24's PWA defence:
+ * `computeAnswersHash` already stops a resumed DAILY match from scoring
+ * against a word list that moved out from under it on the SAME device, but
+ * it says nothing about a player on a STALE service worker computing that
+ * day's word from an OLD `ANSWERS` array while everyone else's fresh client
+ * computes it from the new one — there is no backend here to compare
+ * against and catch that live. `DICTIONARY_VERSION` is the fingerprint that
+ * makes such a mismatch detectable after the fact (see `HistoryEntry` in
+ * src/storage/schema.ts, which stamps every finished match with the
+ * dictionary version that produced it) rather than two players silently
+ * disagreeing about "today's word" with no way to tell why.
+ */
+function hashAnswers(answers: readonly string[]): string {
+  const input = answers.join('\u0000');
+  let hash = 0x811c9dc5; // FNV-1a 32-bit offset basis
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16);
+}
+
 function renderAnswersSource(answers: readonly string[]): string {
   const entries = answers.map((word) => `  ${JSON.stringify(word)},`).join('\n');
   return `${LICENSE_HEADER}
@@ -586,6 +615,9 @@ function renderAnswersSource(answers: readonly string[]): string {
 export const ANSWERS: readonly string[] = [
 ${entries}
 ];
+
+// See hashAnswers's doc comment in scripts/build-dictionary.ts.
+export const DICTIONARY_VERSION = ${JSON.stringify(hashAnswers(answers))};
 `;
 }
 
