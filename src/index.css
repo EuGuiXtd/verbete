@@ -157,6 +157,55 @@
     background-color: var(--ink);
     color: var(--knockout);
   }
+
+  /*
+   * Segmented (multi-board) key: Dueto/Quarteto need one letter to show
+   * several independent results at once. The outer .tecla button keeps its
+   * own background, shadow, press travel and touch target unchanged; only
+   * the fill splits into bands, and the letter sits on top of them.
+   */
+  .tecla-multipla {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .tecla-multipla-fundo {
+    position: absolute;
+    inset: 0;
+    display: flex;
+  }
+
+  .tecla-segmento {
+    flex: 1 1 0%;
+  }
+
+  .tecla-segmento-ausente {
+    background-color: var(--paper);
+  }
+
+  .tecla-segmento-presente {
+    background-color: var(--ink-red);
+  }
+
+  .tecla-segmento-certa {
+    background-color: var(--ink);
+  }
+
+  /*
+   * The letter has to stay legible over whichever mix of bands is beneath
+   * it — paper, red ink, black ink, any combination across up to four
+   * boards — so it cannot commit to one fixed text colour the way a
+   * single-state key can. `difference` against --knockout inverts against
+   * whatever is underneath: white text differenced against a light paper
+   * band comes out dark, the same white differenced against a black-ink
+   * band comes out light, without a colour per state to keep in sync here.
+   */
+  .tecla-multipla-letra {
+    position: relative;
+    z-index: 1;
+    color: var(--knockout);
+    mix-blend-mode: difference;
+  }
 }
 
 /*
