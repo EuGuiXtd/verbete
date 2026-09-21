@@ -1,4 +1,13 @@
-import { createContext, useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { createMatch, reduce } from '../engine/match';
 import type { Action, Effect, InvalidReason, MatchState } from '../engine/match';
 import { dayKeyOf, epochDayOf } from '../engine/clock';
@@ -6,8 +15,12 @@ import { dailyAnswers, dailyNumber as computeDailyNumber } from '../engine/daily
 import { VARIANTS, VARIANT_ORDER } from '../engine/constants';
 import type { Mode, Variant } from '../engine/types';
 import { dailyPool, isValidGuess, pickRandomAnswer } from '../data/dictionary';
+import { appendHistory, loadProgress, saveProgress } from '../storage/repository';
+import { computeAnswersHash } from '../storage/schema';
+import type { ProgressRecord } from '../storage/schema';
 import { useReveal } from './useReveal';
 import { useDailyRollover } from './useDailyRollover';
+import { useStats } from './useStats';
 
 /**
  * Rejection reasons, in the one language this game speaks to a player.
@@ -19,6 +32,9 @@ const REJECTION_MESSAGE: Record<InvalidReason, string> = {
   not_in_dictionary: 'Essa palavra não está no dicionário',
   already_guessed: 'Você já tentou essa',
 };
+
+/** How long after the last keystroke a drafted-but-unsubmitted guess is written to storage. */
+const DRAFT_SAVE_DEBOUNCE_MS = 500;
 
 export interface ToastMessage {
   readonly id: number;
@@ -73,13 +89,13 @@ function nextToastId(): number {
   return toastSeq;
 }
 
-/** A fresh daily match for `variant`, pinned to `dayKey`. */
+/** A fresh daily match for `variant`, pinned to `dayKey`. Never consults storage — see loadOrCreateDaily. */
 function createDailyMatch(variant: Variant, dayKey: string): MatchState {
   const answers = dailyAnswers(dayKey, variant, dailyPool());
   return createMatch({ variant, mode: 'diario', dayKey, answers, startedAt: Date.now() });
 }
 
-/** A fresh infinite match for `variant`, excluding whatever answers are passed in. */
+/** A fresh infinite match for `variant`, excluding whatever answers are passed in. Never consults storage — see loadOrCreateInfinite. */
 function createInfiniteMatch(variant: Variant, exclude: ReadonlySet<string>): MatchState {
   const taken = new Set(exclude);
   const answers: string[] = [];
@@ -89,6 +105,106 @@ function createInfiniteMatch(variant: Variant, exclude: ReadonlySet<string>): Ma
     answers.push(answer);
   }
   return createMatch({ variant, mode: 'infinito', dayKey: null, answers, startedAt: Date.now() });
+}
+
+/** What today's daily match for (variant, dayKey) should contain right now, re-derived from scratch. */
+function currentDailyAnswers(variant: Variant, dayKey: string): { answers: readonly string[]; hash: string } {
+  const answers = dailyAnswers(dayKey, variant, dailyPool());
+  return { answers, hash: computeAnswersHash(answers) };
+}
+
+/**
+ * Rebuilds a `MatchState` by folding the engine's own `reduce` over a stored
+ * guess list — the exact same function every live guess already goes
+ * through — rather than hand-assembling a `MatchState` from the record's
+ * fields. `record` is storage's own `ProgressRecord` shape: plain strings,
+ * arrays and numbers, exactly what came back out of `loadProgress`, never a
+ * `MatchState` itself. `answers` is resolved by whichever caller already
+ * decided where they come from — re-derived for daily, read straight off
+ * the record for infinite (see `loadOrCreateDaily`/`loadOrCreateInfinite`
+ * below) — so this function stays agnostic to *why* they are what they are.
+ *
+ * Each historical guess is replayed by writing it into `draft` and reducing
+ * a `SUBMIT`, not by hand-rolling a second copy of the win/lose/solvedAt
+ * bookkeeping `submit()` in engine/match.ts already owns. `deps.now` only
+ * matters if a replayed guess finishes the match; the `finishedAt` the
+ * player actually experienced is restored afterwards from
+ * `record.finishedAt` rather than trusted from the replay, since the replay
+ * runs at reload time, not at the moment the match actually ended.
+ */
+function replayMatch(record: ProgressRecord, answers: readonly string[]): MatchState {
+  let state = createMatch({
+    variant: record.variant,
+    mode: record.mode,
+    dayKey: record.dayKey,
+    answers,
+    startedAt: record.startedAt,
+  });
+  for (const guess of record.guesses) {
+    state = reduce({ ...state, draft: guess }, { type: 'SUBMIT' }, { isValidGuess, now: Date.now }).state;
+  }
+  if (state.status !== 'playing') {
+    return record.finishedAt != null ? { ...state, finishedAt: record.finishedAt } : state;
+  }
+  return { ...state, draft: record.draft };
+}
+
+/**
+ * Restores `variant`'s daily match for `dayKey` from storage when — and
+ * only when — the stored record is actually for that exact day AND
+ * re-deriving that day's answers right now produces the same
+ * `answersHash` the record was saved with. Either mismatch means the
+ * record is stale (the calendar moved on, or a deploy changed the word
+ * list since it was written) and the player gets a brand new match rather
+ * than one scored against answers they never saw.
+ */
+function loadOrCreateDaily(variant: Variant, dayKey: string): MatchState {
+  const record = loadProgress(variant, 'diario');
+  if (record !== null && record.variant === variant && record.mode === 'diario' && record.dayKey === dayKey) {
+    const { answers, hash } = currentDailyAnswers(variant, dayKey);
+    if (hash === record.answersHash) return replayMatch(record, answers);
+  }
+  return createDailyMatch(variant, dayKey);
+}
+
+/**
+ * Restores `variant`'s infinite match from storage when a record exists and
+ * carries a plausible answer set. Infinite's answers were drawn at random
+ * and are not re-derivable from anything else kept in storage, so — unlike
+ * daily — this only needs a shape check, not a hash comparison: there is no
+ * "current" answer set to compare against.
+ */
+function loadOrCreateInfinite(variant: Variant, exclude: ReadonlySet<string>): MatchState {
+  const record = loadProgress(variant, 'infinito');
+  if (
+    record !== null &&
+    record.variant === variant &&
+    record.mode === 'infinito' &&
+    record.answers !== null &&
+    record.answers.length === VARIANTS[variant].boards
+  ) {
+    return replayMatch(record, record.answers);
+  }
+  return createInfiniteMatch(variant, exclude);
+}
+
+/** The `ProgressRecord` that `active`'s current `match` should be saved as. */
+function toProgressRecord(active: { readonly variant: Variant; readonly mode: Mode }, match: MatchState): ProgressRecord {
+  const answers = match.boards.map((board) => board.answer);
+  return {
+    variant: active.variant,
+    mode: active.mode,
+    dayKey: match.dayKey,
+    guesses: match.guesses,
+    draft: match.draft,
+    // Daily is re-derivable from dayKey and never stores its answers (see
+    // computeAnswersHash's doc comment in storage/schema.ts); infinite's
+    // were drawn at random and have nowhere else to come from.
+    answers: active.mode === 'infinito' ? answers : null,
+    answersHash: computeAnswersHash(answers),
+    startedAt: match.startedAt,
+    finishedAt: match.finishedAt,
+  };
 }
 
 type MatchMap = Record<Variant, Record<Mode, MatchState | null>>;
@@ -129,9 +245,9 @@ function requireMatch(matches: MatchMap, variant: Variant, mode: Mode): MatchSta
  *
  * `matches` holds all six variant x mode combinations a player can reach,
  * created lazily: a combination the player has never switched to stays
- * `null` until `SELECT_MODE` first creates it, so opening the app never
- * burns a daily deck draw or a random infinite word for boards nobody
- * looked at yet.
+ * `null` until `SELECT_MODE` first creates (or restores) it, so opening the
+ * app never burns a daily deck draw or a random infinite word for boards
+ * nobody looked at yet.
  *
  * `pendingDaily[variant]` is the new day key a rollover found waiting while
  * that variant's daily match was still in progress — see the ROLLOVER case.
@@ -155,27 +271,34 @@ type ProviderAction =
   | { type: 'EFFECTS_FLUSHED' };
 
 /**
- * Pure — reads no clock, no storage, calls no setter (`Date.now()` inside
- * `createDailyMatch`/`createInfiniteMatch` is the one exception this file
- * has always made, same as the `createSoloMatch` it replaces: a match's own
- * `startedAt` timestamp, not a decision the reducer branches on). Every
- * write to a match goes through this one function, and `useReducer`'s
- * contract is what makes that safe under a fast typist: React guarantees
- * this reducer is called with the true, up-to-date `Slice` for every queued
- * action, in order, even when several dispatches land in the same
- * synchronous browser task with no render in between. That is the property
- * a hand-synced ref cannot give you — see git history on this file for the
- * bug that shipped without it.
+ * Reads no clock beyond `Date.now()` inside `createDailyMatch`/
+ * `createInfiniteMatch`/`replayMatch` (a match's own `startedAt`/`finishedAt`
+ * timestamp, not a decision this function branches on) and reads storage
+ * only through `loadOrCreateDaily`/`loadOrCreateInfinite`, both synchronous,
+ * deterministic lookups keyed on this action's own primitive fields — the
+ * same kind of sanctioned exception `Date.now()` already was before this
+ * task. Every write to a match goes through this one function, and
+ * `useReducer`'s contract is what makes that safe under a fast typist: React
+ * guarantees this reducer is called with the true, up-to-date `Slice` for
+ * every queued action, in order, even when several dispatches land in the
+ * same synchronous browser task with no render in between. That is the
+ * property a hand-synced ref cannot give you — see git history on this file
+ * for the bug that shipped without it.
  *
  * Every action below carries a raw input — an engine `Action`, a `variant`,
  * a `dayKey` — never a pre-built `MatchState`. `SELECT_MODE` and
- * `ROLLOVER` both need to construct a fresh `MatchState` (via
- * `createDailyMatch`/`createInfiniteMatch`), and both do it from parameters
- * the action itself carries plus `slice`'s own fields (`lastSeenDayKey`,
- * `pendingDaily`) — never from a value some `useEffect` or callback
- * computed outside this function and handed in ready-made. That is what
- * keeps this reducer's guarantee intact for daily mode exactly the way it
- * already held for `NEW_MATCH`.
+ * `ROLLOVER` both need to construct a fresh (or restored) `MatchState` (via
+ * `loadOrCreateDaily`/`loadOrCreateInfinite`), and both do it from
+ * parameters the action itself carries plus `slice`'s own fields
+ * (`lastSeenDayKey`, `pendingDaily`) — never from a value some `useEffect`
+ * or callback computed outside this function and handed in ready-made. In
+ * particular, restoring a match from storage is not an exception to this:
+ * `loadOrCreateDaily`/`loadOrCreateInfinite` fetch the raw `ProgressRecord`
+ * themselves, right here, and turn it into a `MatchState` via `replayMatch`
+ * in the same synchronous call — there is no `RESTORE` action anywhere in
+ * `ProviderAction`, and no dispatch site in this file ever carries a
+ * `MatchState`. That is what keeps this reducer's guarantee intact for
+ * restore-from-storage exactly the way it already held for `NEW_MATCH`.
  */
 function providerReducer(slice: Slice, action: ProviderAction): Slice {
   switch (action.type) {
@@ -207,8 +330,8 @@ function providerReducer(slice: Slice, action: ProviderAction): Slice {
       }
       const created =
         action.mode === 'diario'
-          ? createDailyMatch(action.variant, slice.lastSeenDayKey)
-          : createInfiniteMatch(action.variant, new Set());
+          ? loadOrCreateDaily(action.variant, slice.lastSeenDayKey)
+          : loadOrCreateInfinite(action.variant, new Set());
       return {
         ...slice,
         active: { variant: action.variant, mode: action.mode },
@@ -233,7 +356,7 @@ function providerReducer(slice: Slice, action: ProviderAction): Slice {
           pendingDaily = { ...pendingDaily, [variant]: action.dayKey };
         } else {
           // Finished: rolls over on its own, no banner needed.
-          matches = setMatch(matches, variant, 'diario', createDailyMatch(variant, action.dayKey));
+          matches = setMatch(matches, variant, 'diario', loadOrCreateDaily(variant, action.dayKey));
         }
       }
       return { ...slice, matches, pendingDaily, lastSeenDayKey: action.dayKey };
@@ -243,7 +366,7 @@ function providerReducer(slice: Slice, action: ProviderAction): Slice {
       if (dayKey === null) return slice;
       return {
         ...slice,
-        matches: setMatch(slice.matches, action.variant, 'diario', createDailyMatch(action.variant, dayKey)),
+        matches: setMatch(slice.matches, action.variant, 'diario', loadOrCreateDaily(action.variant, dayKey)),
         pendingDaily: { ...slice.pendingDaily, [action.variant]: null },
       };
     }
@@ -255,7 +378,7 @@ function providerReducer(slice: Slice, action: ProviderAction): Slice {
 function initSlice(): Slice {
   const active: { variant: Variant; mode: Mode } = { variant: 'solo', mode: 'infinito' };
   const matches = emptyMatchMap();
-  matches[active.variant][active.mode] = createInfiniteMatch(active.variant, new Set());
+  matches[active.variant][active.mode] = loadOrCreateInfinite(active.variant, new Set());
   return {
     active,
     matches,
@@ -271,17 +394,67 @@ export interface MatchProviderProps {
 
 /**
  * Owns all six variant x mode `MatchState`s, dispatches every action
- * through the engine's `reduce`, and translates the effects it hands back
- * into UI: a toast and a row shake for REJECTED, the reveal gate for
- * ACCEPTED. BOARD_SOLVED and FINISHED need no UI state of their own here —
- * `state.boards[i].solvedAt` and `state.status` already carry that, and
- * Board.tsx already derives its frozen/solved presentation from them.
+ * through the engine's `reduce`, translates the effects it hands back into
+ * UI (a toast and a row shake for REJECTED, the reveal gate for ACCEPTED),
+ * and persists progress, stats and history through `src/storage/`.
+ *
+ * Four independent triggers write progress, none of them a keystroke: each
+ * committed guess (immediately), the draft (debounced 500ms), the tab being
+ * backgrounded (`visibilitychange` → `hidden`, more reliable than
+ * `beforeunload` on mobile), and — for stats/history, which are cumulative
+ * logs rather than a snapshot of the active match — once, exactly when a
+ * match finishes.
  */
 export function MatchProvider({ children }: MatchProviderProps) {
   const [slice, dispatchProvider] = useReducer(providerReducer, undefined, initSlice);
   const [toasts, setToasts] = useState<readonly ToastMessage[]>([]);
   const [shakeToken, setShakeToken] = useState(0);
   const reveal = useReveal();
+  const stats = useStats();
+
+  const activeMatch = requireMatch(slice.matches, slice.active.variant, slice.active.mode);
+
+  // Always-current snapshot of what is on screen, for callbacks that must
+  // persist "whatever is active right now" without becoming unstable
+  // themselves (a fresh identity every render would retrigger every effect
+  // below on every keystroke). Same ref-for-latest-value pattern
+  // useDailyRollover already uses for `onNewDay`.
+  const latestRef = useRef({ active: slice.active, match: activeMatch });
+  latestRef.current = { active: slice.active, match: activeMatch };
+
+  const flushActiveProgress = useCallback(() => {
+    saveProgress(toProgressRecord(latestRef.current.active, latestRef.current.match));
+  }, []);
+
+  // On each committed guess: this fires exactly when `guesses` gets a new
+  // array, which only happens on an accepted SUBMIT (see engine/match.ts's
+  // submit()) — a TYPE/BACKSPACE only ever touches `draft`, never `guesses`.
+  useEffect(() => {
+    flushActiveProgress();
+  }, [activeMatch.guesses, flushActiveProgress]);
+
+  // The draft, debounced: a keystroke must not hit storage on every press,
+  // only once typing has paused for DRAFT_SAVE_DEBOUNCE_MS.
+  useEffect(() => {
+    const timer = setTimeout(flushActiveProgress, DRAFT_SAVE_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [activeMatch.draft, flushActiveProgress]);
+
+  // A backgrounded tab, not `beforeunload`: many mobile browsers never fire
+  // beforeunload for a tab switch or an app switch, so this is the more
+  // reliable moment to catch a draft the 500ms debounce above has not
+  // flushed yet.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') flushActiveProgress();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [flushActiveProgress]);
 
   // The one place a day change is detected. `ROLLOVER` carries only the raw
   // day key `useDailyRollover` computed from the real clock — every
@@ -296,7 +469,8 @@ export function MatchProvider({ children }: MatchProviderProps) {
   }, []);
 
   // The one place side effects actually happen — deliberately not inside
-  // `providerReducer`, which stays pure. Runs once per render that finds a
+  // `providerReducer`, which stays free of anything but the sanctioned
+  // clock/storage reads documented on it. Runs once per render that finds a
   // non-empty queue, in order, regardless of how many dispatches produced
   // it, then drains the queue it just processed.
   useEffect(() => {
@@ -313,14 +487,35 @@ export function MatchProvider({ children }: MatchProviderProps) {
           setShakeToken(0);
           break;
         case 'BOARD_SOLVED':
-        case 'FINISHED':
-          // Already encoded in `slice.match` (solvedAt / status). Later
-          // tasks (result modal, stats) hook these; this task has neither.
+          // Already encoded in `slice.match` (solvedAt). Later tasks (result
+          // modal) hook this; this task has none.
           break;
+        case 'FINISHED': {
+          // The one write that must happen exactly once per completed
+          // match: stats and history are cumulative logs, not a snapshot of
+          // the active match, so the per-guess and debounced progress saves
+          // above must never touch them — only this branch does, driven by
+          // the FINISHED effect itself, which engine/match.ts's submit()
+          // emits at most once per match.
+          const { variant, mode } = slice.active;
+          const attempts = effect.status === 'won' ? activeMatch.guesses.length : null;
+          const dayKey = activeMatch.dayKey;
+          stats.recordResult(variant, mode, { won: effect.status === 'won', attempts, dayKey, mode });
+          appendHistory({
+            variant,
+            mode,
+            dayKey,
+            won: effect.status === 'won',
+            attempts,
+            finishedAt: activeMatch.finishedAt ?? Date.now(),
+          });
+          saveProgress(toProgressRecord(slice.active, activeMatch));
+          break;
+        }
       }
     }
     dispatchProvider({ type: 'EFFECTS_FLUSHED' });
-  }, [slice.pendingEffects, reveal]);
+  }, [slice.pendingEffects, slice.active, activeMatch, reveal, stats]);
 
   const type = useCallback(
     (letter: string) => dispatchProvider({ type: 'MATCH_ACTION', action: { type: 'TYPE', letter } }),
@@ -346,11 +541,19 @@ export function MatchProvider({ children }: MatchProviderProps) {
     setShakeToken(0);
   }, []);
 
-  const selectMode = useCallback((variant: Variant, mode: Mode) => {
-    dispatchProvider({ type: 'SELECT_MODE', variant, mode });
-    setToasts([]);
-    setShakeToken(0);
-  }, []);
+  const selectMode = useCallback(
+    (variant: Variant, mode: Mode) => {
+      // Persist whatever the match we are leaving has, including a draft
+      // the 500ms debounce has not flushed yet — the only moment that draft
+      // would otherwise be lost, since nothing else touches an inactive
+      // match's storage record once it stops being active.
+      flushActiveProgress();
+      dispatchProvider({ type: 'SELECT_MODE', variant, mode });
+      setToasts([]);
+      setShakeToken(0);
+    },
+    [flushActiveProgress],
+  );
 
   const applyDailyRollover = useCallback(() => {
     dispatchProvider({ type: 'APPLY_DAILY_ROLLOVER', variant: slice.active.variant });
@@ -358,7 +561,6 @@ export function MatchProvider({ children }: MatchProviderProps) {
     setShakeToken(0);
   }, [slice.active.variant]);
 
-  const activeMatch = requireMatch(slice.matches, slice.active.variant, slice.active.mode);
   const dailyNumber = activeMatch.dayKey !== null ? computeDailyNumber(activeMatch.dayKey) : null;
   const dailyRolloverPending =
     slice.active.mode === 'diario' && slice.pendingDaily[slice.active.variant] !== null;

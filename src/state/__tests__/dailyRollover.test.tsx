@@ -40,6 +40,12 @@ function setClockBack() {
 }
 
 beforeEach(() => {
+  // MatchProvider now restores from storage on mount/mode-switch: without
+  // this, a later test could "restore" a previous test's leftover progress
+  // record instead of the fresh match this suite expects — the two tests
+  // that share the same START system time would otherwise see identical
+  // dayKeys/hashes and genuinely satisfy the restore path.
+  localStorage.clear();
   vi.useFakeTimers();
   vi.setSystemTime(START);
   document.documentElement.style.setProperty('--reveal-duration', '0ms');
@@ -49,6 +55,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  localStorage.clear();
   document.documentElement.style.removeProperty('--reveal-duration');
   document.documentElement.style.removeProperty('--press-duration');
 });

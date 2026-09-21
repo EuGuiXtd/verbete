@@ -32,10 +32,16 @@ function pressed(name: string): string | null {
 
 beforeEach(() => {
   infiniteAnswerIndex = 0;
+  // MatchProvider now restores from storage on mount/mode-switch: without
+  // this, a later test could "restore" a previous test's leftover progress
+  // record instead of the fresh match built from this suite's mocked
+  // pickRandomAnswer sequence.
+  localStorage.clear();
 });
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
 });
 
 describe('ModeTabs', () => {

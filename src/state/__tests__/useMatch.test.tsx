@@ -35,6 +35,11 @@ function typeWord(result: { current: ReturnType<typeof useMatch> }, word: string
 beforeEach(() => {
   answerIndex = 0;
   isValidGuess.mockClear();
+  // MatchProvider now restores from storage on mount/mode-switch: without
+  // this, a later test in this file could "restore" a previous test's
+  // leftover progress record instead of building the fresh match this
+  // suite's mocked pickRandomAnswer sequence expects.
+  localStorage.clear();
   vi.useFakeTimers();
   // Deterministic, non-zero gate: real enough to prove the race guard works,
   // short enough that the tests don't need to wait long.
@@ -45,6 +50,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  localStorage.clear();
   document.documentElement.style.removeProperty('--reveal-duration');
   document.documentElement.style.removeProperty('--press-duration');
 });
