@@ -1,7 +1,28 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { Header } from '../Header';
+import { MatchProvider } from '../../../state/MatchProvider';
+import { useMatch } from '../../../state/useMatch';
 import { THEME_ATTRIBUTE } from '../../../state/useTheme';
+
+// A small, deterministic stand-in for the real 1500-word daily pool — see
+// ModeTabs.test.tsx's own comment for why this must be distinct entries,
+// not just distinct labels.
+const DAILY_POOL = Array.from({ length: 20 }, (_, i) => `w${String(i).padStart(4, '0')}`);
+let infiniteAnswerIndex = 0;
+const infiniteAnswers = ['casal', 'terra', 'prato', 'findo', 'claro', 'muito', 'nunca'];
+
+vi.mock('../../../data/dictionary', () => ({
+  isValidGuess: () => true,
+  dailyPool: () => DAILY_POOL,
+  pickRandomAnswer: () => {
+    const answer = infiniteAnswers[infiniteAnswerIndex % infiniteAnswers.length]!;
+    infiniteAnswerIndex += 1;
+    return answer;
+  },
+}));
 
 // jsdom's own matchMedia always answers `false` and never fires a listener,
 // but installing a controllable one (as src/state/__tests__/useTheme.test.ts
@@ -20,8 +41,23 @@ function installMatchMedia() {
   });
 }
 
+function wrapper({ children }: { children: ReactNode }) {
+  return <MatchProvider>{children}</MatchProvider>;
+}
+
+/** Lets a test switch the active variant/mode Header reads via `useMatch()`, without going through ModeTabs. */
+function SwitchTo({ variant, mode }: { variant: 'solo' | 'dueto' | 'quarteto'; mode: 'diario' | 'infinito' }) {
+  const { selectMode } = useMatch();
+  return (
+    <button type="button" onClick={() => selectMode(variant, mode)}>
+      mudar para {variant}/{mode}
+    </button>
+  );
+}
+
 beforeEach(() => {
   installMatchMedia();
+  infiniteAnswerIndex = 0;
   localStorage.clear();
   document.documentElement.removeAttribute(THEME_ATTRIBUTE);
 });
@@ -34,7 +70,7 @@ afterEach(() => {
 
 describe('Header', () => {
   it('carries the wordmark set as a dictionary headword — lowercase serif, then "s.m."', () => {
-    render(<Header />);
+    render(<Header />, { wrapper });
     // Syllable-dotted, the way a dictionary headword is set (see
     // src/dev/Showcase.tsx's own "ver·be·te"), not the plain word.
     expect(screen.getByText('ver·be·te')).toBeDefined();
@@ -42,14 +78,14 @@ describe('Header', () => {
   });
 
   it('offers help, stats and theme controls, each with a Portuguese accessible name', () => {
-    render(<Header />);
+    render(<Header />, { wrapper });
     expect(screen.getByRole('button', { name: /ajuda/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /estatísticas/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /tema/i })).toBeDefined();
   });
 
   it('leaves every header control enabled — Task 22 wired Ajuda and Estatísticas up', () => {
-    render(<Header />);
+    render(<Header />, { wrapper });
     const help = screen.getByRole('button', { name: /ajuda/i }) as HTMLButtonElement;
     const stats = screen.getByRole('button', { name: /estatísticas/i }) as HTMLButtonElement;
     const theme = screen.getByRole('button', { name: /tema/i }) as HTMLButtonElement;
@@ -60,7 +96,7 @@ describe('Header', () => {
   });
 
   it('opens HelpModal from Ajuda and closes it again on Escape', () => {
-    render(<Header />);
+    render(<Header />, { wrapper });
     fireEvent.click(screen.getByRole('button', { name: /ajuda/i }));
     expect(screen.getByRole('dialog', { name: /como jogar/i })).toBeDefined();
 
@@ -69,7 +105,7 @@ describe('Header', () => {
   });
 
   it('opens StatsModal from Estatísticas, and only one dialog is on screen at a time', () => {
-    render(<Header />);
+    render(<Header />, { wrapper });
     fireEvent.click(screen.getByRole('button', { name: /estatísticas/i }));
     expect(screen.getByRole('dialog', { name: /estatísticas/i })).toBeDefined();
 
@@ -79,7 +115,7 @@ describe('Header', () => {
   });
 
   it('reaches About from inside Help, and History from inside Stats', () => {
-    render(<Header />);
+    render(<Header />, { wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: /ajuda/i }));
     fireEvent.click(screen.getByRole('button', { name: /sobre as fontes/i }));
@@ -91,7 +127,7 @@ describe('Header', () => {
   });
 
   it('cycles the theme through the document attribute when its button is pressed', () => {
-    render(<Header />);
+    render(<Header />, { wrapper });
     const themeButton = screen.getByRole('button', { name: /tema/i });
 
     fireEvent.click(themeButton);
@@ -102,5 +138,60 @@ describe('Header', () => {
 
     fireEvent.click(themeButton);
     expect(document.documentElement.hasAttribute(THEME_ATTRIBUTE)).toBe(false); // back to 'system'
+  });
+
+  // Review round 2, finding 3: Stats used to always default to Solo/Diário
+  // regardless of what the player was actually playing (the app's own
+  // default active match is Solo/Infinito — see MatchProvider's
+  // `initSlice`), so a first-time player who just finished their first
+  // (default) match and opened Stats would see zeroes for a mode they
+  // never played. This proves the selector now opens on whatever `active`
+  // actually is.
+  it('defaults the Stats selector to the currently active variant and mode, not a hardcoded Solo/Diário', () => {
+    render(
+      <>
+        <Header />
+        <SwitchTo variant="dueto" mode="diario" />
+      </>,
+      { wrapper },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /mudar para dueto\/diario/i }));
+    fireEvent.click(screen.getByRole('button', { name: /estatísticas/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /estatísticas/i });
+    const pressed = (name: string) => within(dialog).getByRole('button', { name }).getAttribute('aria-pressed');
+    expect(pressed('Dueto')).toBe('true');
+    expect(pressed('Diário')).toBe('true');
+    // Confirms it isn't just always "whatever was last picked" by coincidence:
+    // Solo/Infinito would have been the previous default's own values.
+    expect(pressed('Solo')).toBe('false');
+    expect(pressed('Infinito')).toBe('false');
+  });
+
+  // Review round 2, finding 2: closing a modal opened by a real mouse click
+  // must return focus to the button that opened it, not leave it on
+  // whatever the browser defaults to (the document body). `userEvent.click`,
+  // not `fireEvent.click`, is what actually gives this test a real signal:
+  // `fireEvent.click` only dispatches a bare click event and never focuses
+  // anything (jsdom does not implement a browser's implicit
+  // click-focuses-the-button behaviour for it), so it would report success
+  // whether or not this fix existed. `userEvent.click` drives the full
+  // pointer/focus sequence a real click actually produces, including the
+  // non-zero `event.detail` `blurOnMouseActivation.ts` keys off — which is
+  // also why Header no longer calls it on this button (see Modal.tsx's own
+  // doc comment). e2e/header-modal-focus.spec.ts proves the same thing
+  // against a real browser, for the keyboard path this test doesn't cover.
+  it('returns focus to the Ajuda button after a mouse-clicked HelpModal closes', async () => {
+    const user = userEvent.setup();
+    render(<Header />, { wrapper });
+    const helpButton = screen.getByRole('button', { name: /ajuda/i });
+
+    await user.click(helpButton);
+    expect(screen.getByRole('dialog')).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: 'fechar' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(helpButton);
   });
 });

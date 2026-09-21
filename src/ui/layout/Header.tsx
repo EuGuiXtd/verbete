@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMatch } from '../../state/useMatch';
 import { useTheme } from '../../state/useTheme';
 import type { ThemeChoice } from '../../state/useTheme';
 import { blurOnMouseActivation } from '../blurOnMouseActivation';
@@ -58,9 +59,15 @@ type OpenModal = 'help' | 'stats' | 'history' | 'about' | null;
  * and About are reached from inside those two, not from their own header
  * button — see `OpenModal`'s doc comment. Theme is fully wired: `useTheme`
  * already exists and this task's scope explicitly includes it.
+ *
+ * Ajuda and Estatísticas deliberately do NOT call `blurOnMouseActivation` —
+ * see `Modal.tsx`'s own doc comment on why a modal trigger needs the
+ * opposite of every other chrome button's behaviour (it must stay focused
+ * so closing the dialog has something real to return focus to).
  */
 export function Header() {
   const { theme, setTheme } = useTheme();
+  const { active } = useMatch();
   const [openModal, setOpenModal] = useState<OpenModal>(null);
 
   return (
@@ -71,8 +78,7 @@ export function Header() {
           type="button"
           className="tecla px-3"
           aria-label="Ajuda"
-          onClick={(event: MouseEvent<HTMLButtonElement>) => {
-            blurOnMouseActivation(event);
+          onClick={() => {
             setOpenModal('help');
           }}
         >
@@ -82,8 +88,7 @@ export function Header() {
           type="button"
           className="tecla px-3"
           aria-label="Estatísticas"
-          onClick={(event: MouseEvent<HTMLButtonElement>) => {
-            blurOnMouseActivation(event);
+          onClick={() => {
             setOpenModal('stats');
           }}
         >
@@ -110,6 +115,15 @@ export function Header() {
         isOpen={openModal === 'stats'}
         onClose={() => { setOpenModal(null); }}
         onOpenHistory={() => { setOpenModal('history'); }}
+        // Review round 2: defaults the selector to whatever the player is
+        // actually playing right now, rather than a hardcoded Solo/Diário —
+        // a player who just finished an Infinito match and opens Stats
+        // should see that match's numbers, not zeroes for a mode they
+        // weren't in. `StatsModal` re-reads these only at mount (it fully
+        // unmounts on close), so this always reflects `active` as of the
+        // moment Stats was opened, and stays freely switchable afterwards.
+        defaultVariant={active.variant}
+        defaultMode={active.mode}
       />
       <HistoryModal isOpen={openModal === 'history'} onClose={() => { setOpenModal(null); }} />
       <AboutModal isOpen={openModal === 'about'} onClose={() => { setOpenModal(null); }} />

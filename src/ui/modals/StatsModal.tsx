@@ -21,6 +21,15 @@ export interface StatsModalProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly onOpenHistory: () => void;
+  /**
+   * What the selector opens on. Optional, defaulting to Solo/Diário, so a
+   * standalone render of this component (as every test below does) keeps
+   * working without a caller having to know what the "sensible default"
+   * is. `Header` passes the player's actual currently-active variant/mode
+   * instead (review round 2) — see its own doc comment on why.
+   */
+  readonly defaultVariant?: Variant;
+  readonly defaultMode?: Mode;
 }
 
 /**
@@ -50,10 +59,37 @@ function mostRecentWinAttempts(variant: Variant, mode: Mode): number | null {
  * always-zero number next to a real one for the other mode would read as a
  * bug, not as a deliberate design choice.
  */
-export function StatsModal({ isOpen, onClose, onOpenHistory }: StatsModalProps) {
-  const [variant, setVariant] = useState<Variant>('solo');
-  const [mode, setMode] = useState<Mode>('diario');
+export function StatsModal({
+  isOpen,
+  onClose,
+  onOpenHistory,
+  defaultVariant = 'solo',
+  defaultMode = 'diario',
+}: StatsModalProps) {
+  const [variant, setVariant] = useState<Variant>(defaultVariant);
+  const [mode, setMode] = useState<Mode>(defaultMode);
   const { getStats } = useStats();
+
+  // `Header` always renders `<StatsModal isOpen={...} />` — this component
+  // never actually unmounts between opens the way `Modal` (its own child,
+  // conditionally rendered below) does, so `useState(defaultVariant)`'s
+  // initial value is captured exactly once, on Header's very first render,
+  // and would otherwise go stale for every subsequent open. This resets the
+  // selector back to whatever is currently active each time `isOpen`
+  // transitions to `true`, using React's own documented pattern for
+  // "adjust state in response to a prop changing" — a plain `setState`
+  // call during render, guarded so it only fires on the actual transition —
+  // rather than a `useEffect`, specifically to avoid a one-frame flash of
+  // the previous selection before the dialog's first paint (an effect runs
+  // after paint; this runs before it, in the same render pass).
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setVariant(defaultVariant);
+      setMode(defaultMode);
+    }
+  }
 
   // Recomputed on every render this component is asked to make (isOpen
   // flipping true, or the selector changing) rather than cached in state:
@@ -176,14 +212,14 @@ export function StatsModal({ isOpen, onClose, onOpenHistory }: StatsModalProps) 
 
       <div className="folha-regua" />
 
-      <button
-        type="button"
-        className="text-small underline decoration-rule underline-offset-2"
-        onClick={(event: MouseEvent<HTMLButtonElement>) => {
-          blurOnMouseActivation(event);
-          onOpenHistory();
-        }}
-      >
+      {/*
+        No `blurOnMouseActivation` here — same reason as HelpModal's "sobre
+        as fontes": this button's only job is to open HistoryModal, and it
+        needs to still be focused when that dialog mounts for Modal.tsx's
+        focus-restore to have a real target. See Modal.tsx's own doc
+        comment.
+      */}
+      <button type="button" className="text-small underline decoration-rule underline-offset-2" onClick={onOpenHistory}>
         ver histórico completo
       </button>
     </Modal>
