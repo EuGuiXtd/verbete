@@ -36,6 +36,48 @@ const SEGMENT_STATE_CLASS: Record<KeyState, string> = {
   correct: 'tecla-segmento tecla-segmento-certa',
 };
 
+/**
+ * Fixed per-state ink for the segmented key's letter, one colour per band —
+ * not a single colour blended against whatever sits underneath. These are
+ * exactly the (background, ink) pairs `.tecla-ausente`/`.tecla-presente`/
+ * `.tecla-certa`/the default `.tecla` already use for the single-key case,
+ * so nothing new needs its own contrast proof: `--ghost` on `--paper`,
+ * `--knockout` on `--ink-red`, `--knockout` on `--ink`, and `--ink` on
+ * `--paper-raised` (the untried key's own resting look) all already clear
+ * 4.5:1 in both themes — see the task-17 fix report for the computed
+ * numbers. A fixed `mix-blend-mode: difference` source was tried first and
+ * dropped: differencing a single colour against several different
+ * backgrounds at once produces contrast that is a coincidence of which
+ * theme you're in, not a guarantee — it measured under 1.3:1 against every
+ * scored band in dark mode.
+ */
+const SEGMENT_TEXT_COLOR: Record<KeyState, string> = {
+  unused: 'var(--ink)',
+  absent: 'var(--ghost)',
+  present: 'var(--knockout)',
+  correct: 'var(--knockout)',
+};
+
+/**
+ * One letter glyph, painted once, with each band's own fixed ink colour
+ * — via a hard-stop `linear-gradient` clipped to the text — instead of
+ * duplicating the letter once per band (illegible at four narrow Quarteto
+ * bands) or picking one colour that has to work everywhere (impossible;
+ * see `SEGMENT_TEXT_COLOR`'s comment). Each stop repeats its own colour at
+ * both the start and end of its slice, which is what makes the boundary a
+ * hard edge instead of a blend between neighbouring bands.
+ */
+export function segmentedTextGradient(states: readonly KeyState[]): string {
+  const boardCount = states.length;
+  const stops = states.flatMap((state, index) => {
+    const color = SEGMENT_TEXT_COLOR[state];
+    const start = (index / boardCount) * 100;
+    const end = ((index + 1) / boardCount) * 100;
+    return [`${color} ${start}%`, `${color} ${end}%`];
+  });
+  return `linear-gradient(to right, ${stops.join(', ')})`;
+}
+
 const STATE_LABEL: Record<KeyState, string> = {
   unused: 'ainda sem tentativa',
   absent: 'não existe na palavra',
@@ -99,7 +141,12 @@ export function Key({ letter, states, onPress }: KeyProps) {
           ))}
         </span>
       )}
-      <span className={segmented ? 'tecla-multipla-letra' : undefined}>{letter}</span>
+      <span
+        className={segmented ? 'tecla-multipla-letra' : undefined}
+        style={segmented ? { backgroundImage: segmentedTextGradient(states) } : undefined}
+      >
+        {letter}
+      </span>
     </button>
   );
 }

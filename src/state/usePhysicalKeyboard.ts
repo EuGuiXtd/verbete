@@ -41,6 +41,26 @@ function hasBlockingModifier(event: KeyboardEvent): boolean {
 }
 
 /**
+ * Enter and Space are the two keys a focused `<button>` already turns into
+ * its own `click` — every virtual key, the enviar/apagar action keys, and
+ * any other button in the app (a theme toggle, say) included. This listener
+ * must not also act on them when a button owns the keypress: doing so
+ * would not just double-fire the same action (Enter on a focused "enviar"
+ * button submitting twice), it can fire two *different* actions from one
+ * keypress (Enter on a focused "apagar" button would delete a letter via
+ * the button's own click AND submit via this hook's `onEnter`). An
+ * ordinary letter is not owned by a button this way — a plain `<button>`
+ * does not activate on a letter key — so typing is still forwarded no
+ * matter what currently has focus, which is what keeps "play from any
+ * focus position" true; only Enter/Space are excluded, and only when a
+ * button is the target.
+ */
+function isButtonOwnedActivationKey(event: KeyboardEvent): boolean {
+  if (!(event.target instanceof HTMLButtonElement)) return false;
+  return event.key === 'Enter' || event.key === ' ';
+}
+
+/**
  * Desktop-only typing path. Listens on `document`, never on a text field —
  * there is no real `<input>` anywhere in this game. A native pt-BR keyboard
  * would offer accented keys, a dead-key `´`, autocorrect and composition
@@ -53,6 +73,7 @@ export function usePhysicalKeyboard({ onLetter, onEnter, onBackspace }: Physical
     const handleKeyDown = (event: KeyboardEvent) => {
       if (hasBlockingModifier(event)) return;
       if (isEditableTarget(event.target)) return;
+      if (isButtonOwnedActivationKey(event)) return;
 
       if (LETTER_KEY.test(event.key)) {
         onLetter(event.key.toUpperCase());

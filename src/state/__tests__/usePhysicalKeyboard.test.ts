@@ -104,4 +104,75 @@ describe('usePhysicalKeyboard', () => {
 
     expect(onLetter).not.toHaveBeenCalled();
   });
+
+  describe('a focused <button> owns its own Enter/Space activation', () => {
+    it('does not also submit when Enter targets a focused button', () => {
+      // Every virtual key, the enviar/apagar action keys, and any other
+      // button in the app render as a real <button>. A real browser turns
+      // a focused button's Enter keydown into that button's own click —
+      // this hook must stay out of the way of that, not add a second
+      // action on top of it.
+      const onEnter = vi.fn();
+      const button = document.createElement('button');
+      document.body.appendChild(button);
+      renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace: vi.fn() }));
+
+      button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+      expect(onEnter).not.toHaveBeenCalled();
+    });
+
+    it('does not reinterpret Enter on a focused button as submit — the button keeps its own action only', () => {
+      // The sharper failure mode this guards against: Enter on a focused
+      // "apagar" button, unguarded, would both delete a letter (via the
+      // button's own click) AND submit (via this hook's onEnter) — two
+      // different actions from one keypress, not just a duplicate of one.
+      // jsdom does not implement the browser's native "Enter activates a
+      // focused button" default action (verified directly: dispatching a
+      // keydown Enter at a focused <button> produces no click event), so
+      // the button's own resulting click is simulated here to stand in for
+      // it — this is what a real browser produces, not an assumption.
+      let actions = 0;
+      const onEnter = () => {
+        actions += 1;
+      };
+      const button = document.createElement('button');
+      button.addEventListener('click', () => {
+        actions += 1; // stands in for the button's own onClick (e.g. onBackspace)
+      });
+      document.body.appendChild(button);
+      renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace: vi.fn() }));
+
+      button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+      expect(actions).toBe(1);
+    });
+
+    it('still forwards an ordinary letter typed while a button has focus', () => {
+      // A plain <button> does not natively activate on a letter key, so
+      // "play from any focus position" must still hold: tabbing onto the
+      // theme toggle (or any button) and typing must not go silent.
+      const onLetter = vi.fn();
+      const button = document.createElement('button');
+      document.body.appendChild(button);
+      renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() }));
+
+      button.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+
+      expect(onLetter).toHaveBeenCalledWith('A');
+    });
+
+    it('still submits on Enter when nothing owns it — the ordinary gameplay path', () => {
+      // Control case: with no button focused (the common case during
+      // actual play, where focus sits on document.body), Enter must keep
+      // submitting exactly as before.
+      const onEnter = vi.fn();
+      renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace: vi.fn() }));
+
+      dispatchKey('Enter');
+
+      expect(onEnter).toHaveBeenCalledTimes(1);
+    });
+  });
 });

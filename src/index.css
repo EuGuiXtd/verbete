@@ -192,19 +192,27 @@
   }
 
   /*
-   * The letter has to stay legible over whichever mix of bands is beneath
-   * it — paper, red ink, black ink, any combination across up to four
-   * boards — so it cannot commit to one fixed text colour the way a
-   * single-state key can. `difference` against --knockout inverts against
-   * whatever is underneath: white text differenced against a light paper
-   * band comes out dark, the same white differenced against a black-ink
-   * band comes out light, without a colour per state to keep in sync here.
+   * The letter is painted once, but each band underneath it gets its own
+   * fixed, already-proven ink colour rather than one colour trying to read
+   * over all of them: the component sets `background-image` to a hard-stop
+   * gradient (see `segmentedTextGradient` in Key.tsx) that repeats each
+   * band's own `.tecla-*` text colour under its own slice of the letter,
+   * then this class clips that gradient to the glyph instead of painting
+   * the box behind it.
+   *
+   * A `mix-blend-mode: difference` source was tried first and dropped: a
+   * single colour differenced against several different backgrounds is a
+   * coincidence of the current theme's token magnitudes, not a guarantee
+   * — it measured under 1.3:1 against every scored band in dark mode. See
+   * the task-17 fix report for the numbers.
    */
   .tecla-multipla-letra {
     position: relative;
     z-index: 1;
-    color: var(--knockout);
-    mix-blend-mode: difference;
+    color: transparent;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 }
 
