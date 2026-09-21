@@ -1,10 +1,3 @@
-// @vitest-environment jsdom
-//
-// See the Task 14 report: the installed vitest@5.0.1 does not act on
-// `environmentMatchGlobs` (removed from the package; verified by grepping
-// the installed dist for the string — zero matches). This per-file pragma
-// is vitest's own supported mechanism for the same outcome and is what
-// actually puts these tests on a real Storage implementation.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadProgress, loadStats, saveProgress, saveStats } from '../repository';
 import { emptyStats } from '../../engine/stats';

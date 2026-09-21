@@ -20,11 +20,21 @@ const NOTICE_PT_BR =
   'mas o resultado desta partida não será lembrado.';
 
 export interface KeyValueStore {
-  /** False once real storage has proven unusable — reads/writes go to memory only. */
+  /**
+   * False once real storage has proven unusable — reads/writes go to memory
+   * only. This, not `set`'s return value, is what tells you whether a write
+   * will survive a reload.
+   */
   readonly isPersistent: boolean;
   /** Set once, only after the full quota-escalation ladder is exhausted. */
   readonly notice: string | null;
   get(key: string): string | null;
+  /**
+   * Returns `true` when the write landed *somewhere* — real storage or the
+   * in-memory fallback — which in this implementation is always. It is not a
+   * durability guarantee: a `true` here can still mean the value only lives
+   * in memory for the rest of this session. Check `isPersistent` for that.
+   */
   set(key: string, value: string): boolean;
   remove(key: string): void;
   keys(): readonly string[];
