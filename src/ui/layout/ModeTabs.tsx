@@ -31,7 +31,15 @@ export function ModeTabs() {
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule px-4 py-2 sm:px-6">
-      <div className="flex flex-wrap items-center gap-3">
+      {/*
+        gap-6 between the two groups against gap-1 inside each: at 1280px the
+        old gap-3 read as one row of five identical pills with two of them
+        highlighted, so nothing said that Solo/Dueto/Quarteto and
+        Diário/Infinito are separate choices. The `role="group"` labels
+        already say it to assistive tech; this says it to everyone else. It
+        wraps at 320px, where the two groups land on their own lines anyway.
+      */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <div className="flex gap-1" role="group" aria-label="Variante">
           {VARIANT_ORDER.map((variant) => (
             <button

@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { KEY_ROWS } from '../../engine/keyboard';
 import type { KeyState } from '../../engine/keyboard';
 import { Key, vibrateOnTouch } from './Key';
@@ -37,6 +39,81 @@ function ActionKey({ label, ariaLabel, onPress }: ActionKeyProps) {
     >
       {label}
     </button>
+  );
+}
+
+/** Which side of a keyboard row currently has content scrolled out of view. */
+type ScrollEdges = 'none' | 'start' | 'end' | 'both';
+
+/**
+ * One scrolling keyboard row, plus the affordance that says it scrolls.
+ *
+ * At 320px the three rows measure scrollWidth 476/428/458 against a
+ * clientWidth of 304: row 1 shows Q–Y and the rest is simply off-screen,
+ * with no fade, no shadow and no scrollbar Chromium chooses to paint. The
+ * page itself deliberately does not overflow (Shell's `overflow-x-hidden`,
+ * see Keyboard's own doc comment above), which is the right call — but it
+ * also removes the last cue that anything is there. A player on an iPhone SE
+ * saw six of ten keys and no hint that the other four existed.
+ *
+ * `data-edges` drives a `mask-image` fade in index.css. Measured rather than
+ * assumed, per side, because a permanent fade would be a lie at every width
+ * where the row fits: at 375px a Solo row does fit, and fading its first and
+ * last key would suggest hidden content that is not there. `none` (the
+ * initial value, and the value whenever nothing overflows) renders exactly
+ * what shipped before.
+ *
+ * Listens rather than polls: `scroll` for the player moving the row, and a
+ * ResizeObserver on both the scrollport AND its content for a viewport
+ * change or a variant switch (Solo's 30px keys against Quarteto's 44px ones
+ * change the content width without the scrollport itself resizing).
+ * ResizeObserver is guarded because jsdom does not implement it; without
+ * one the rows simply keep their initial `none`, which is the pre-existing
+ * behaviour, not a crash.
+ */
+function KeyboardRow({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState<ScrollEdges>('none');
+
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+
+    // A sub-pixel slack: a scrollport's own width and its content's width
+    // are fractional, so an exact comparison reports a permanent 0.3px of
+    // "hidden" content on a row that fits perfectly.
+    const SLACK = 1;
+    const measure = () => {
+      const atStart = element.scrollLeft <= SLACK;
+      const atEnd = element.scrollLeft + element.clientWidth >= element.scrollWidth - SLACK;
+      setEdges(atStart && atEnd ? 'none' : atStart ? 'end' : atEnd ? 'start' : 'both');
+    };
+
+    measure();
+    element.addEventListener('scroll', measure, { passive: true });
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver === 'function') {
+      observer = new ResizeObserver(measure);
+      observer.observe(element);
+      const content = element.firstElementChild;
+      if (content !== null) observer.observe(content);
+    }
+
+    return () => {
+      element.removeEventListener('scroll', measure);
+      observer?.disconnect();
+    };
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      data-edges={edges}
+      className="fila-teclado flex w-full overflow-x-auto overscroll-x-contain"
+    >
+      {children}
+    </div>
   );
 }
 
@@ -91,7 +168,7 @@ export function Keyboard({ states, boardCount, onKey, onEnter, onBackspace }: Ke
         // to make room for one. See that rule's own doc comment for the
         // rest (why outline rather than box-shadow, and the segmented-key
         // double-ring it links to).
-        <div key={rowIndex} className="flex w-full overflow-x-auto overscroll-x-contain">
+        <KeyboardRow key={rowIndex}>
           {/*
             `shrink-0`: same reason as Shell.tsx's `.grid-anchor` — without
             it, this wrapper's default `flex-shrink: 1` would let the row
@@ -117,7 +194,7 @@ export function Keyboard({ states, boardCount, onKey, onEnter, onBackspace }: Ke
               </>
             )}
           </div>
-        </div>
+        </KeyboardRow>
       ))}
     </div>
   );

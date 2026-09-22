@@ -17,7 +17,7 @@ describe('ToastHost', () => {
     render(
       <ToastHost
         toasts={[
-          { id: 1, text: 'Faltam letras' },
+          { id: 1, text: 'A palavra tem cinco letras' },
           { id: 2, text: 'Você já tentou essa' },
         ]}
         onDismiss={() => {}}
@@ -26,13 +26,13 @@ describe('ToastHost', () => {
 
     const region = screen.getByRole('status');
     const texts = Array.from(region.querySelectorAll('.aviso')).map((node) => node.textContent);
-    expect(texts).toEqual(['Faltam letras', 'Você já tentou essa']);
+    expect(texts).toEqual(['A palavra tem cinco letras', 'Você já tentou essa']);
   });
 
   it('passes its onDismiss through to each toast', () => {
     vi.useFakeTimers();
     const onDismiss = vi.fn();
-    render(<ToastHost toasts={[{ id: 5, text: 'Faltam letras' }]} onDismiss={onDismiss} />);
+    render(<ToastHost toasts={[{ id: 5, text: 'A palavra tem cinco letras' }]} onDismiss={onDismiss} />);
 
     vi.advanceTimersByTime(2600);
     expect(onDismiss).toHaveBeenCalledWith(5);

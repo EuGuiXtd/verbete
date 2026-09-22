@@ -263,6 +263,38 @@
   }
 
   /*
+   * The scroll affordance for a keyboard row wider than the viewport (320px
+   * phones, and every width in Dueto/Quarteto). `data-edges` is measured in
+   * Keyboard.tsx's KeyboardRow — see its doc comment for why this is not a
+   * permanent fade — and names the side that has content scrolled out of
+   * view. The mask fades the row's own paint towards transparent over the
+   * last 28px, which reads as "this continues" against the sheet without
+   * adding a scrollbar, a shadow or a control.
+   *
+   * `mask-image` rather than a gradient background: the keys are opaque and
+   * fill the row's full height, so anything painted BEHIND them is invisible
+   * at exactly the edge where the cue is needed. A mask clips the element's
+   * painted result, children included. Autoprefixer adds the -webkit- form.
+   */
+  .fila-teclado[data-edges='start'] {
+    mask-image: linear-gradient(to right, transparent 0, #000 28px);
+  }
+
+  .fila-teclado[data-edges='end'] {
+    mask-image: linear-gradient(to left, transparent 0, #000 28px);
+  }
+
+  .fila-teclado[data-edges='both'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 28px,
+      #000 calc(100% - 28px),
+      transparent 100%
+    );
+  }
+
+  /*
    * Segmented (multi-board) key: Dueto/Quarteto need one letter to show
    * several independent results at once. The outer .tecla button keeps its
    * own background, shadow, press travel and touch target unchanged; only

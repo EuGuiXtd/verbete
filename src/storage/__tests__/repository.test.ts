@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadProgress, loadStats, saveProgress, saveStats } from '../repository';
+import { loadProgress, loadRecent, loadStats, rememberRecent, saveProgress, saveRecent, saveStats } from '../repository';
 import { emptyStats } from '../../engine/stats';
-import { progressKey } from '../keys';
+import { progressKey, recentKey } from '../keys';
 import { computeAnswersHash } from '../schema';
 
 describe('repository', () => {
@@ -89,6 +89,41 @@ describe('repository', () => {
     expect(loaded).toEqual(record);
     // Specifically: the hash itself is untouched, not cleared or recomputed.
     expect(loaded?.answersHash).toBe('stale-hash-from-a-previous-deploy');
+  });
+
+  describe('rememberRecent (I7: the key the quota ladder clears)', () => {
+    it('writes the key at all — nothing did before, so clearRecent freed zero bytes', () => {
+      expect(localStorage.getItem(recentKey('solo'))).toBeNull();
+      rememberRecent('solo', ['casal']);
+      expect(localStorage.getItem(recentKey('solo'))).not.toBeNull();
+      expect(loadRecent('solo')).toEqual(['casal']);
+    });
+
+    it('appends without duplicating, keeping the newest occurrence last', () => {
+      rememberRecent('solo', ['casal', 'terra']);
+      rememberRecent('solo', ['terra', 'prato']);
+      expect(loadRecent('solo')).toEqual(['casal', 'terra', 'prato']);
+    });
+
+    it('caps the list so it never becomes a large fraction of the answer pool', () => {
+      for (let i = 0; i < 150; i += 1) rememberRecent('solo', [`w${String(i)}`]);
+      const recent = loadRecent('solo');
+      expect(recent).toHaveLength(100);
+      expect(recent[recent.length - 1]).toBe('w149');
+      expect(recent).not.toContain('w49');
+    });
+
+    it('keeps each variant separate', () => {
+      rememberRecent('solo', ['casal']);
+      rememberRecent('dueto', ['terra']);
+      expect(loadRecent('solo')).toEqual(['casal']);
+      expect(loadRecent('dueto')).toEqual(['terra']);
+    });
+
+    it('treats a corrupt list as empty rather than feeding it to the answer draw', () => {
+      saveRecent('solo', [1, null, 'casal'] as unknown as readonly string[]);
+      expect(loadRecent('solo')).toEqual(['casal']);
+    });
   });
 
   describe('computeAnswersHash', () => {

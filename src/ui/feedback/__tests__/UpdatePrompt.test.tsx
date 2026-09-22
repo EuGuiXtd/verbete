@@ -8,7 +8,7 @@ import { UpdatePrompt } from '../UpdatePrompt';
  * owns, and nothing a jsdom unit test can meaningfully exercise. What IS
  * this project's own code, and worth proving here, is what `UpdatePrompt`
  * does with the hook's `onNeedReload` callback: stays invisible until it
- * fires, then renders the Portuguese prompt and wires "Recarregar" to an
+ * fires, then renders the Portuguese prompt and wires "recarregar" to an
  * actual reload — none of which `e2e/pwa-offline.spec.ts` (a real service
  * worker, but never an update) touches at all.
  */
@@ -52,10 +52,10 @@ describe('UpdatePrompt', () => {
     });
 
     expect(screen.getByText('Nova versão disponível')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Recarregar' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'recarregar' })).toBeDefined();
   });
 
-  it('reloads the page when "Recarregar" is activated', () => {
+  it('reloads the page when "recarregar" is activated', () => {
     const reload = vi.fn();
     const originalLocation = window.location;
     // jsdom's window.location.reload is a no-op that cannot be spied on
@@ -70,7 +70,7 @@ describe('UpdatePrompt', () => {
     act(() => {
       capturedOnNeedReload?.();
     });
-    screen.getByRole('button', { name: 'Recarregar' }).click();
+    screen.getByRole('button', { name: 'recarregar' }).click();
 
     expect(reload).toHaveBeenCalledTimes(1);
 

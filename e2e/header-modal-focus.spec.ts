@@ -24,7 +24,7 @@ test.describe('header modal focus', () => {
     await page.goto('/');
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
-    const ajudaButton = page.getByRole('button', { name: 'Ajuda' });
+    const ajudaButton = page.getByRole('button', { name: 'Como jogar' });
     await ajudaButton.focus();
     await expect(ajudaButton).toBeFocused();
 
@@ -82,7 +82,7 @@ test.describe('header modal focus', () => {
     await page.goto('/');
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
-    const ajudaButton = page.getByRole('button', { name: 'Ajuda' });
+    const ajudaButton = page.getByRole('button', { name: 'Como jogar' });
     await ajudaButton.click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
@@ -92,7 +92,7 @@ test.describe('header modal focus', () => {
 
     // The regression round 2 introduced, made concrete: with the draft
     // empty, a bare Enter that actually reaches the game produces a
-    // "Faltam letras" rejection toast (engine/match.ts's `too_short`,
+    // "A palavra tem cinco letras" rejection toast (engine/match.ts's `too_short`,
     // surfaced via MatchProvider's REJECTED effect) — proof this Enter was
     // not instead swallowed by a still-focused "Ajuda" button re-clicking
     // itself. If it had been swallowed, neither the toast nor this
@@ -101,6 +101,6 @@ test.describe('header modal focus', () => {
     // real regression, so that is what this checks first and foremost.
     await page.keyboard.press('Enter');
     await expect(dialog).toBeHidden();
-    await expect(page.getByText('Faltam letras')).toBeVisible();
+    await expect(page.getByText('A palavra tem cinco letras')).toBeVisible();
   });
 });

@@ -48,11 +48,27 @@ const DEFINITIONS: Record<string, string | null> = {
   terra: null,
   prato: null,
 };
+/**
+ * When non-null, every `loadDefinition` call parks here instead of resolving,
+ * so a test can decide exactly when the definition lands — which is the only
+ * way to reproduce the finish-then-restart race the staleness guard exists
+ * for (see `firedForKey` in MatchProvider.tsx).
+ */
+let deferredLoads: { word: string; resolve: (value: string | null) => void }[] | null = null;
+
 vi.mock('../../data/definitions', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../data/definitions')>();
   return {
     ...actual,
-    loadDefinition: (word: string) => Promise.resolve(DEFINITIONS[word] ?? null),
+    loadDefinition: (word: string) => {
+      if (deferredLoads !== null) {
+        const pending = deferredLoads;
+        return new Promise<string | null>((resolve) => {
+          pending.push({ word, resolve });
+        });
+      }
+      return Promise.resolve(DEFINITIONS[word] ?? null);
+    },
   };
 });
 
@@ -70,6 +86,7 @@ function typeWord(result: { current: ReturnType<typeof useMatch> }, word: string
 
 beforeEach(() => {
   answerIndex = 0;
+  deferredLoads = null;
   isValidGuess.mockClear();
   // Task 25 fix round 1 (F7): `.mockClear()` only resets call history, never
   // a `.mockImplementation(...)` override an earlier test set — a real gap
@@ -127,7 +144,7 @@ describe('useMatch', () => {
     });
 
     expect(result.current.state.guesses).toHaveLength(0);
-    expect(result.current.toasts.map((toast) => toast.text)).toEqual(['Faltam letras']);
+    expect(result.current.toasts.map((toast) => toast.text)).toEqual(['A palavra tem cinco letras']);
   });
 
   it('rejects a word outside the dictionary, in pt-BR, without spending an attempt', () => {
@@ -352,7 +369,7 @@ describe('useMatch', () => {
       });
 
       expect(result.current.announcement).toBe(
-        'Linha 1: T ausente, E ausente, R ausente, R ausente, A na posição errada.',
+        'Tentativa 1: T ausente, E ausente, R ausente, R ausente, A na posição errada.',
       );
     });
 
@@ -365,7 +382,7 @@ describe('useMatch', () => {
       });
 
       expect(result.current.announcement).toBe(
-        'Linha 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você venceu!',
+        'Tentativa 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você acertou!',
       );
     });
 
@@ -385,12 +402,12 @@ describe('useMatch', () => {
       }
 
       expect(result.current.state.status).toBe('lost');
-      expect(result.current.announcement.startsWith('Linha 6')).toBe(true);
+      expect(result.current.announcement.startsWith('Tentativa 6')).toBe(true);
       // Task 25 fix round 1 (F2): a lost match now names the word — a
       // sighted player still sees it in ResultModal's own reveal; without
       // this a screen-reader user heard only "não foi dessa vez" and never
       // learned it at all.
-      expect(result.current.announcement.endsWith('Fim de jogo: você não acertou dessa vez. A palavra era casal.')).toBe(
+      expect(result.current.announcement.endsWith('Fim de jogo: não foi dessa vez. A palavra era casal.')).toBe(
         true,
       );
     });
@@ -407,7 +424,7 @@ describe('useMatch', () => {
       // never share one string. `announcement` must already be settled here,
       // before the async `loadDefinition` chain has had any chance to run.
       expect(result.current.announcement).toBe(
-        'Linha 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você venceu!',
+        'Tentativa 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você acertou!',
       );
       expect(result.current.definitionAnnouncement).toBe('');
 
@@ -425,7 +442,70 @@ describe('useMatch', () => {
       expect(result.current.definitionAnnouncement).toBe('Definição de casal: par de pessoas que vivem juntas.');
       // Unchanged — the definition never gets folded into it.
       expect(result.current.announcement).toBe(
-        'Linha 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você venceu!',
+        'Tentativa 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você acertou!',
+      );
+    });
+
+    /**
+     * The parked item: "definition-announcement staleness race, no committed
+     * regression test". Two reviewers traced the guard and agreed it holds;
+     * nothing pinned it. `loadDefinition` is deferred here so the restart
+     * lands strictly between the FINISHED effect firing and the definition
+     * resolving — the exact window the guard exists for and the only one in
+     * which it can be wrong.
+     */
+    it('discards a definition that resolves after the player has already restarted', async () => {
+      deferredLoads = [];
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      typeWord(result, 'CASAL');
+      act(() => {
+        result.current.submit();
+      });
+      expect(result.current.state.status).toBe('won');
+      expect(deferredLoads).toHaveLength(1);
+      expect(deferredLoads[0]!.word).toBe('casal');
+
+      // The player hits "nova palavra" before the definitions chunk lands.
+      act(() => {
+        result.current.newMatch();
+      });
+      expect(result.current.state.status).toBe('playing');
+
+      await act(async () => {
+        deferredLoads![0]!.resolve(DEFINITIONS.casal!);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // The previous match's gloss must not be read out over a board the
+      // player has already started playing.
+      expect(result.current.definitionAnnouncement).toBe('');
+    });
+
+    it('still announces the definition when nothing has moved on in the meantime', async () => {
+      // The positive control for the test above: same deferred timing, same
+      // resolve, no restart — so a guard that discarded everything would
+      // fail here rather than looking correct.
+      deferredLoads = [];
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      typeWord(result, 'CASAL');
+      act(() => {
+        result.current.submit();
+      });
+      expect(deferredLoads).toHaveLength(1);
+
+      await act(async () => {
+        deferredLoads![0]!.resolve(DEFINITIONS.casal!);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.definitionAnnouncement).toBe(
+        'Definição de casal: par de pessoas que vivem juntas.',
       );
     });
 
@@ -445,7 +525,7 @@ describe('useMatch', () => {
       });
 
       expect(result.current.announcement).toBe(
-        'Linha 1, tentativa P R A T O. ' +
+        'Tentativa 1: P R A T O. ' +
           'Tabuleiro 1: ausente, na posição errada, na posição errada, na posição errada, ausente. ' +
           'Tabuleiro 2, resolvido: correta, correta, correta, correta, correta.',
       );
@@ -468,7 +548,7 @@ describe('useMatch', () => {
       // play reads "Tabuleiro em jogo: 1.", not the plural noun over a
       // single item.
       expect(result.current.announcement).toBe(
-        'Linha 2, tentativa C A S A L. Tabuleiro em jogo: 1. ' +
+        'Tentativa 2: C A S A L. Tabuleiro em jogo: 1. ' +
           'Tabuleiro 1: ausente, na posição errada, ausente, ausente, ausente.',
       );
     });

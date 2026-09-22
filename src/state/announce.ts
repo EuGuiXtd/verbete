@@ -41,19 +41,24 @@ function formatList(items: readonly string[]): string {
  * all (see this task's report). Two shapes, chosen by board count:
  *
  * SOLO (one board): every letter states its own result, matching the
- * brief's own worked example exactly — "Linha 2: C correta, A na posição
- * errada, S ausente, A ausente, L ausente." Five letters is nothing to read
- * aloud, and repeating each letter next to its own result is the most
- * direct translation of "what a sighted player reads off the row in one
- * glance" into speech.
+ * brief's own worked example exactly — "Tentativa 2: C correta, A na posição
+ * errada, S ausente, A ausente, L ausente." ("Tentativa", not "Linha": this
+ * was the only place in the product that said "Linha", and the multi-board
+ * shape used both nouns in one sentence — everywhere a player can SEE, an
+ * attempt is a *tentativa*. There is no visible attempt counter at all, so
+ * this channel was numbering progress with a word the game does not use.)
+ *
+ * Five letters is nothing to read aloud, and repeating each letter next to
+ * its own result is the most direct translation of "what a sighted player
+ * reads off the row in one glance" into speech.
  *
  * DUETO/QUARTETO (two or four boards): the SAME five letters were just
  * submitted to every board at once — only the *scoring* differs board to
  * board, never the guess itself. Repeating "letter, result" once per board
  * would repeat those five letters verbatim two or four times over, which is
  * exactly the noise this task's brief warns about. Instead the guess is
- * spelled once ("tentativa C A S A L"), and each board then states only its
- * own five results in order.
+ * spelled once ("Tentativa 3: C A S A L."), and each board then states only
+ * its own five results in order.
  *
  * Every board's own row comes from `boardRows()` — the exact function
  * `Board.tsx` renders from — never from re-scoring the guess against every
@@ -103,7 +108,7 @@ function buildSoloBody(state: MatchState, guessIndex: number, rowNumber: number)
   if (row === undefined) return '';
   const guess = row.guess;
   const parts = row.tiles.map((tile, index) => `${guess[index] ?? ''} ${TILE_LABEL[tile]}`);
-  return `Linha ${String(rowNumber)}: ${parts.join(', ')}.`;
+  return `Tentativa ${String(rowNumber)}: ${parts.join(', ')}.`;
 }
 
 function buildMultiBody(
@@ -139,7 +144,7 @@ function buildMultiBody(
     const boardWord = activeBoardNumbers.length === 1 ? 'Tabuleiro' : 'Tabuleiros';
     leadIn = `${boardWord} em jogo: ${formatList(activeBoardNumbers)}. `;
   }
-  return `Linha ${String(rowNumber)}, tentativa ${spelled}. ${leadIn}${boardTexts.join(' ')}`;
+  return `Tentativa ${String(rowNumber)}: ${spelled}. ${leadIn}${boardTexts.join(' ')}`;
 }
 
 /**
@@ -157,13 +162,17 @@ function buildMultiBody(
  * they already typed correctly, not one they need told back to them.
  */
 function buildFinishedSuffix(status: 'won' | 'lost', state: MatchState): string {
-  if (status === 'won') return 'Fim de jogo: você venceu!';
+  // The same two phrases ResultModal.tsx puts on screen (STATUS_HEADLINE),
+  // not near-synonyms of them: a listener and a reader were hearing and
+  // seeing different words for the same moment ("você venceu!" against
+  // "Você acertou!").
+  if (status === 'won') return 'Fim de jogo: você acertou!';
 
   const unsolved = state.boards.filter((board) => board.solvedAt === null).map((board) => board.answer);
-  if (unsolved.length === 0) return 'Fim de jogo: você não acertou dessa vez.';
+  if (unsolved.length === 0) return 'Fim de jogo: não foi dessa vez.';
   const wordLine =
     unsolved.length === 1 ? `A palavra era ${unsolved[0]!}.` : `As palavras eram ${formatList(unsolved)}.`;
-  return `Fim de jogo: você não acertou dessa vez. ${wordLine}`;
+  return `Fim de jogo: não foi dessa vez. ${wordLine}`;
 }
 
 /**

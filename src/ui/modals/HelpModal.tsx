@@ -14,9 +14,12 @@ export interface HelpModalProps {
  * their first guess — both consequences of deliberate design, not
  * omissions (see this task's brief):
  *
- * - Accents are filled in automatically (typing "CASA" matches "casá" if
- *   that were a word) and never count as a hint of their own — the tile
- *   colours only ever score the letters a player actually typed.
+ * - Accents are IGNORED, not filled in. Typing "MOCAS" solves a board whose
+ *   answer is "moças" and the row renders "MOCAS" — no accent ever appears
+ *   on the board. The accented spelling is only ever seen in the reveal.
+ *   (The text here used to promise they were "preenchidos automaticamente",
+ *   which is a different and untrue thing; the cedilla sentence below was
+ *   already accurate and is the right model for both.)
  * - There is no `Ç` key on the virtual keyboard (see engine/keyboard.ts's
  *   own `KEY_ROWS` comment: "No cedilla and no accented keys: input is
  *   A-Z, diacritics are never hints") — a word spelled with "ç" is typed
@@ -32,7 +35,9 @@ export function HelpModal({ isOpen, onClose, onOpenAbout }: HelpModalProps) {
           Adivinhe a palavra secreta de cinco letras. A cada tentativa, cada letra é marcada:{' '}
           <strong>bloco todo tingido de tinta</strong> quando a letra está certa e no lugar certo,{' '}
           <strong>tinta vermelha</strong> quando a letra existe na palavra mas está no lugar errado, e{' '}
-          <strong>sem tinta nenhuma</strong> quando a letra não existe na palavra.
+          <strong>sem tinta nenhuma</strong> quando a letra não existe na palavra. Em leitor de tela essas três
+          marcas são lidas como <strong>correta</strong>, <strong>na posição errada</strong> e{' '}
+          <strong>ausente</strong>.
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
@@ -53,9 +58,9 @@ export function HelpModal({ isOpen, onClose, onOpenAbout }: HelpModalProps) {
         </p>
         <div className="folha-regua" />
         <p>
-          <strong>Os acentos são preenchidos automaticamente</strong> — pode digitar sem se preocupar com til,
-          agudo ou circunflexo. Isso nunca conta como dica: a cor de cada letra depende só do que você
-          digitou, nunca do acento que o jogo completou para você.
+          <strong>Acentos e cedilha são ignorados</strong> — digite só as letras. O tabuleiro mostra exatamente
+          o que você digitou, sem til, agudo ou circunflexo, e o acento nunca conta como dica. A grafia
+          acentuada só aparece no fim, no verbete revelado.
         </p>
         <p>
           <strong>Não há tecla de Ç no teclado.</strong> Palavras com cedilha se digitam com C mesmo — o jogo

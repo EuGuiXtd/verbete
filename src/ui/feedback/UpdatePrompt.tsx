@@ -68,7 +68,7 @@ export function UpdatePrompt() {
       <div className="aviso pointer-events-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
         <p>Nova versão disponível</p>
         <button type="button" className="tecla px-4" onClick={() => window.location.reload()}>
-          Recarregar
+          recarregar
         </button>
       </div>
     </div>

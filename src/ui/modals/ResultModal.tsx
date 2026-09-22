@@ -7,7 +7,13 @@ import type { ShareOutcome } from '../../state/useShare';
 import { blurOnMouseActivation } from '../blurOnMouseActivation';
 import { useFocusTrap } from './useFocusTrap';
 
-const STATUS_HEADLINE: Record<'won' | 'lost', string> = {
+/**
+ * The two phrases the sheet puts on screen when a match ends. Exported so
+ * `src/state/__tests__/announce.test.ts` can hold the screen-reader channel
+ * to the same words — before that test existed the two drifted, and a
+ * listener heard "você venceu!" while the screen said "Você acertou!".
+ */
+export const STATUS_HEADLINE: Record<'won' | 'lost', string> = {
   won: 'Você acertou!',
   lost: 'Não foi dessa vez',
 };

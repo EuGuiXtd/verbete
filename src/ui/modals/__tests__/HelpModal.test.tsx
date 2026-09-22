@@ -12,13 +12,27 @@ describe('HelpModal', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('explains that accents are filled in automatically and never count as a hint', () => {
+  it('says accents are IGNORED — the game does not fill them in (I8)', () => {
     render(<HelpModal isOpen onClose={() => {}} onOpenAbout={() => {}} />);
     // `getAllBy*` rather than `getBy*`: the phrase spans a <strong> nested
     // inside its parent <p>, so both nodes' aggregated text legitimately
     // matches — this only needs to prove the phrase exists somewhere.
-    expect(screen.getAllByText(/acento/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/acentos e cedilha são ignorados/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/nunca conta como dica/i).length).toBeGreaterThan(0);
+    // The old copy promised the opposite, and it was simply untrue: typing
+    // MOCAS solves "moças" and the row renders MOCAS. Nothing is filled in.
+    expect(screen.queryByText(/preenchid/i)).toBeNull();
+  });
+
+  it('names the three tile states the way a screen reader reads them (I9)', () => {
+    // Help explained the states purely as ink ("bloco todo tingido de tinta"),
+    // which is no use to a listener, who instead hears "correta" / "na posição
+    // errada" / "ausente" — words that appeared nowhere else in the product's
+    // own explanation of itself.
+    render(<HelpModal isOpen onClose={() => {}} onOpenAbout={() => {}} />);
+    for (const label of ['correta', 'na posição errada', 'ausente']) {
+      expect(screen.getAllByText(label).length, label).toBeGreaterThan(0);
+    }
   });
 
   it('explains that there is no Ç key', () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WORD_LENGTH } from '../engine/constants';
 
 // Only used if the tokens genuinely cannot be read (no getComputedStyle, or
@@ -95,5 +95,13 @@ export function useReveal(): RevealGates {
 
   const isRevealing = useCallback((key: string) => revealingKeys.has(key), [revealingKeys]);
 
-  return { isRevealing, start };
+  // Memoized, matching useStats's own return (useStats.ts) — the convention
+  // one of the two hooks already documents. `reveal` sits in the dependency
+  // array of MatchProvider's history/stats effect, so a fresh object literal
+  // every render schedules that effect after every render. Only the
+  // `pendingEffects.length === 0` early return stops it double-writing a
+  // match into history and double-counting a result, and what keeps the
+  // queue empty by then is React's batching, not anything this file
+  // guarantees. One unbatched setState away from a real bug.
+  return useMemo(() => ({ isRevealing, start }), [isRevealing, start]);
 }

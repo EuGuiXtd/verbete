@@ -25,7 +25,7 @@ export interface GuessAnnouncerProps {
  * all are polite, so an assistive technology queues them rather than
  * interrupting one with another). `aria-atomic="true"` is the one thing
  * that differs from `ToastHost`: every announcement here replaces the last
- * IN FULL ("Linha 2: ..." fully replacing "Linha 1: ..."), and the two
+ * IN FULL ("Tentativa 2: ..." fully replacing "Tentativa 1: ..."), and the two
  * strings share a long common prefix/shape — without `aria-atomic`, a
  * browser is free to announce only the CHANGED substring, which for this
  * template would routinely be just the trailing half of the sentence.

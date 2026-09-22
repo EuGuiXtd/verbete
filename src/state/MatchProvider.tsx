@@ -16,7 +16,15 @@ import { MODES, VARIANTS, VARIANT_ORDER, WORD_LENGTH } from '../engine/constants
 import type { Mode, Variant } from '../engine/types';
 import { DICTIONARY_VERSION, dailyPool, isValidGuess, pickRandomAnswer } from '../data/dictionary';
 import { loadDefinition } from '../data/definitions';
-import { appendHistory, loadPrefs, loadProgress, savePrefs, saveProgress } from '../storage/repository';
+import {
+  appendHistory,
+  loadPrefs,
+  loadProgress,
+  loadRecent,
+  rememberRecent,
+  savePrefs,
+  saveProgress,
+} from '../storage/repository';
 import { computeAnswersHash } from '../storage/schema';
 import type { ProgressRecord } from '../storage/schema';
 import { buildAnnouncement, buildDefinitionsAnnouncement } from './announce';
@@ -30,7 +38,10 @@ import { useStats } from './useStats';
  * later fails to compile here rather than falling through silently.
  */
 const REJECTION_MESSAGE: Record<InvalidReason, string> = {
-  too_short: 'Faltam letras',
+  // Not "Faltam letras": the usual trigger is four letters typed and Enter
+  // pressed — one letter missing, and a plural message that is simply wrong
+  // in its most common case. Stating the rule works for every count.
+  too_short: 'A palavra tem cinco letras',
   not_in_dictionary: 'Essa palavra não está no dicionário',
   already_guessed: 'Você já tentou essa',
 };
@@ -126,8 +137,15 @@ function createDailyMatch(variant: Variant, dayKey: string): MatchState {
 }
 
 /** A fresh infinite match for `variant`, excluding whatever answers are passed in. Never consults storage — see loadOrCreateInfinite. */
+/**
+ * `exclude` is the caller's own reason to skip a word — the match being
+ * replaced, so "nova palavra" never hands back the same one. The recent list
+ * from storage is added to it here rather than by every caller: it is the
+ * same question ("what has this player just seen in this variant?"), it
+ * simply survives a reload. See `rememberRecent` in storage/repository.ts.
+ */
 function createInfiniteMatch(variant: Variant, exclude: ReadonlySet<string>): MatchState {
-  const taken = new Set(exclude);
+  const taken = new Set([...exclude, ...loadRecent(variant)]);
   const answers: string[] = [];
   for (let i = 0; i < VARIANTS[variant].boards; i += 1) {
     const answer = pickRandomAnswer(taken, Math.random);
@@ -564,6 +582,18 @@ export function MatchProvider({ children }: MatchProviderProps) {
   useEffect(() => {
     flushActiveProgress();
   }, [activeMatch.guesses, flushActiveProgress]);
+
+  // The words infinite mode has just handed out, remembered across reloads so
+  // the next draw does not repeat them (and so `safeStorage`'s `clearRecent`
+  // rung has something to clear). Keyed on the answers themselves, joined by
+  // a separator no answer can contain: a new infinite match changes the key,
+  // a guess does not. `rememberRecent` dedupes, so a re-run is a no-op.
+  const infiniteAnswersKey =
+    slice.active.mode === 'infinito' ? activeMatch.boards.map((board) => board.answer).join('\u0000') : null;
+  useEffect(() => {
+    if (infiniteAnswersKey === null) return;
+    rememberRecent(slice.active.variant, infiniteAnswersKey.split('\u0000'));
+  }, [infiniteAnswersKey, slice.active.variant]);
 
   // Which variant/mode is on screen, remembered across reloads — the other
   // half of `storedActive`/`initSlice` above. Read-modify-write through

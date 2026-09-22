@@ -80,14 +80,14 @@ describe('Header', () => {
 
   it('offers help, stats and theme controls, each with a Portuguese accessible name', () => {
     render(<Header />, { wrapper });
-    expect(screen.getByRole('button', { name: /ajuda/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /como jogar/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /estatísticas/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /tema/i })).toBeDefined();
   });
 
   it('leaves every header control enabled — Task 22 wired Ajuda and Estatísticas up', () => {
     render(<Header />, { wrapper });
-    const help = screen.getByRole('button', { name: /ajuda/i }) as HTMLButtonElement;
+    const help = screen.getByRole('button', { name: /como jogar/i }) as HTMLButtonElement;
     const stats = screen.getByRole('button', { name: /estatísticas/i }) as HTMLButtonElement;
     const theme = screen.getByRole('button', { name: /tema/i }) as HTMLButtonElement;
 
@@ -98,7 +98,7 @@ describe('Header', () => {
 
   it('opens HelpModal from Ajuda and closes it again on Escape', () => {
     render(<Header />, { wrapper });
-    fireEvent.click(screen.getByRole('button', { name: /ajuda/i }));
+    fireEvent.click(screen.getByRole('button', { name: /como jogar/i }));
     expect(screen.getByRole('dialog', { name: /como jogar/i })).toBeDefined();
 
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -110,7 +110,7 @@ describe('Header', () => {
     fireEvent.click(screen.getByRole('button', { name: /estatísticas/i }));
     expect(screen.getByRole('dialog', { name: /estatísticas/i })).toBeDefined();
 
-    fireEvent.click(screen.getByRole('button', { name: /ajuda/i }));
+    fireEvent.click(screen.getByRole('button', { name: /como jogar/i }));
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(screen.getByRole('dialog', { name: /como jogar/i })).toBeDefined();
   });
@@ -118,7 +118,7 @@ describe('Header', () => {
   it('reaches About from inside Help, and History from inside Stats', () => {
     render(<Header />, { wrapper });
 
-    fireEvent.click(screen.getByRole('button', { name: /ajuda/i }));
+    fireEvent.click(screen.getByRole('button', { name: /como jogar/i }));
     fireEvent.click(screen.getByRole('button', { name: /sobre as fontes/i }));
     expect(screen.getByRole('dialog', { name: /sobre as palavras/i })).toBeDefined();
 
@@ -191,7 +191,7 @@ describe('Header', () => {
   it('leaves no button focused after a mouse-clicked HelpModal closes', async () => {
     const user = userEvent.setup();
     render(<Header />, { wrapper });
-    const helpButton = screen.getByRole('button', { name: /ajuda/i });
+    const helpButton = screen.getByRole('button', { name: /como jogar/i });
 
     await user.click(helpButton);
     expect(screen.getByRole('dialog')).toBeDefined();

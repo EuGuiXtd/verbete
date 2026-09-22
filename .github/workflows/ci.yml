@@ -1,11 +1,18 @@
 name: CI
 
 # Pushes only to dev/main, plus every pull request. A push trigger on '**'
-# would fire alongside the pull_request trigger for the same commit on any
-# branch that already has an open PR, running this whole job twice for no
-# reason; dev/main are the two branches that matter to see green even
-# without an open PR (a direct push, or the post-merge state), while a
-# feature branch gets its CI signal from the PR itself.
+# would fire alongside the pull_request trigger for the same commit on EVERY
+# branch that has an open PR; restricting it to dev/main keeps that to the
+# two branches that must be green even with no PR open (a direct push, or
+# the post-merge state), while a feature branch gets its signal from the PR.
+#
+# Note the residual cost, since an earlier version of this comment claimed
+# the restriction avoided duplicate runs outright: in this repo's flow `dev`
+# usually DOES have an open PR into `main` while a release is in flight, so
+# a push to `dev` fires both triggers. That duplicate is accepted on
+# purpose. Dropping `dev` from the push trigger would leave a push to `dev`
+# with no open PR — which is the normal state between releases — with no CI
+# signal at all, which is the worse of the two.
 #
 # This job never touches deployment secrets and only ever needs read access
 # to the repository, so a pull_request from a fork (which GitHub Actions

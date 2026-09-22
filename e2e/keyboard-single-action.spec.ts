@@ -33,6 +33,6 @@ test.describe('keyboard-only activation', () => {
     // pass even if the toast genuinely appeared and then auto-dismissed —
     // exactly the double-fire this test exists to catch.
     await page.waitForTimeout(400);
-    expect(await page.getByText('Faltam letras').count()).toBe(0);
+    expect(await page.getByText('A palavra tem cinco letras').count()).toBe(0);
   });
 });

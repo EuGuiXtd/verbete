@@ -1,4 +1,4 @@
-import { VARIANT_LABEL, WORD_LENGTH } from './constants';
+import { MODE_LABEL, VARIANT_LABEL, WORD_LENGTH } from './constants';
 import { dailyNumber } from './daily';
 import { boardRows } from './match';
 import type { MatchState } from './match';
@@ -16,7 +16,10 @@ export function renderShare(state: MatchState, options: ShareOptions): string {
   const score = state.status === 'won' ? `${state.guesses.length}/${state.maxAttempts}` : `X/${state.maxAttempts}`;
   const title = state.dayKey
     ? `Verbete ${VARIANT_LABEL[state.variant]} #${dailyNumber(state.dayKey)} — ${score}`
-    : `Verbete ${VARIANT_LABEL[state.variant]} (infinito) — ${score}`;
+    // MODE_LABEL, not a second lowercase copy of the word: the tab the
+    // player pressed says "Infinito", capitalised like Solo/Dueto/Quarteto
+    // beside it.
+    : `Verbete ${VARIANT_LABEL[state.variant]} (${MODE_LABEL.infinito}) — ${score}`;
 
   const lines: string[] = [title, ''];
 

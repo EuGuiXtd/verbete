@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMatch, reduce } from '../../engine/match';
 import type { EngineDeps, MatchState } from '../../engine/match';
 import { buildAnnouncement, buildDefinitionsAnnouncement } from '../announce';
+import { STATUS_HEADLINE } from '../../ui/modals/ResultModal';
 
 const deps: EngineDeps = { isValidGuess: () => true, now: () => 1_000 };
 
@@ -22,7 +23,7 @@ describe('buildAnnouncement', () => {
     // pattern the brief's example, "C correta, A na posição errada, S
     // ausente, A ausente, L ausente", spells out.
     let state = createMatch({ variant: 'solo', mode: 'infinito', dayKey: null, answers: ['cobra'], startedAt: 0 });
-    let round = submit(state, 'TERRA'); // row 1: a harmless wrong guess, just to land on "Linha 2"
+    let round = submit(state, 'TERRA'); // row 1: a harmless wrong guess, just to land on "Tentativa 2"
     state = round.state;
     round = submit(state, 'CASAL'); // row 2: the guess the brief's example describes
     state = round.state;
@@ -34,7 +35,7 @@ describe('buildAnnouncement', () => {
       finishedStatus: round.finished,
     });
 
-    expect(text).toBe('Linha 2: C correta, A na posição errada, S ausente, A ausente, L ausente.');
+    expect(text).toBe('Tentativa 2: C correta, A na posição errada, S ausente, A ausente, L ausente.');
   });
 
   it('appends the win announcement when this same guess finishes the match', () => {
@@ -49,7 +50,7 @@ describe('buildAnnouncement', () => {
     });
 
     expect(text).toBe(
-      'Linha 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você venceu!',
+      'Tentativa 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você acertou!',
     );
   });
 
@@ -74,7 +75,7 @@ describe('buildAnnouncement', () => {
     // Task 25 fix round 1 (F2): a lost match also names the still-unsolved
     // word — the one thing a sighted player still gets from ResultModal's
     // own reveal that a screen-reader user otherwise never learns at all.
-    expect(text.endsWith('Fim de jogo: você não acertou dessa vez. A palavra era fungo.')).toBe(true);
+    expect(text.endsWith('Fim de jogo: não foi dessa vez. A palavra era fungo.')).toBe(true);
   });
 
   it('returns an empty string for an out-of-range guess index rather than throwing', () => {
@@ -108,7 +109,7 @@ describe('buildAnnouncement', () => {
       });
 
       expect(text).toBe(
-        'Linha 1, tentativa C A S A L. ' +
+        'Tentativa 1: C A S A L. ' +
           'Tabuleiro 1: correta, na posição errada, ausente, ausente, ausente. ' +
           'Tabuleiro 2, resolvido: correta, correta, correta, correta, correta. ' +
           'Tabuleiro 3: ausente, correta, na posição errada, na posição errada, na posição errada. ' +
@@ -144,7 +145,7 @@ describe('buildAnnouncement', () => {
       });
 
       expect(text).toBe(
-        'Linha 2, tentativa T E R R A. Tabuleiros em jogo: 1, 3 e 4. ' +
+        'Tentativa 2: T E R R A. Tabuleiros em jogo: 1, 3 e 4. ' +
           'Tabuleiro 1: ausente, ausente, ausente, correta, correta. ' +
           'Tabuleiro 3: na posição errada, ausente, ausente, ausente, correta. ' +
           'Tabuleiro 4: ausente, ausente, ausente, ausente, ausente.',
@@ -204,6 +205,46 @@ describe('buildAnnouncement', () => {
       for (const letter of ['C', 'A', 'S', 'L']) {
         expect(afterSpelling).not.toMatch(new RegExp(`\\b${letter}\\b`));
       }
+    });
+  });
+
+  describe('the two channels say the same thing (I9)', () => {
+    /**
+     * A listener and a reader were getting different words for the same
+     * moment: the sheet said "Você acertou!" / "Não foi dessa vez" while the
+     * live region said "você venceu!" / "você não acertou dessa vez". Pinned
+     * against ResultModal's own constant, so neither side can be reworded
+     * alone.
+     */
+    function lowerFirst(text: string): string {
+      return text.charAt(0).toLowerCase() + text.slice(1);
+    }
+
+    it('uses ResultModal\'s own win phrase', () => {
+      let state = createMatch({ variant: 'solo', mode: 'infinito', dayKey: null, answers: ['casal'], startedAt: 0 });
+      const round = submit(state, 'CASAL');
+      state = round.state;
+      const text = buildAnnouncement({
+        state,
+        guessIndex: 0,
+        solvedBoardIndexes: round.solved,
+        finishedStatus: 'won',
+      });
+      expect(text).toContain(lowerFirst(STATUS_HEADLINE.won));
+    });
+
+    it("uses ResultModal's own loss phrase", () => {
+      let state = createMatch({ variant: 'solo', mode: 'infinito', dayKey: null, answers: ['casal'], startedAt: 0 });
+      for (const word of ['TERRA', 'PRATO', 'FINDO', 'CLARO', 'HORAS', 'MUITO']) {
+        state = submit(state, word).state;
+      }
+      const text = buildAnnouncement({
+        state,
+        guessIndex: 5,
+        solvedBoardIndexes: [],
+        finishedStatus: 'lost',
+      });
+      expect(text).toContain(lowerFirst(STATUS_HEADLINE.lost));
     });
   });
 

@@ -17,16 +17,18 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Only the tones something actually uses as a Tailwind utility.
+        // `paper.raised` and `knockout` generated classes nothing referenced
+        // — the custom properties behind them are consumed directly, in
+        // index.css, which is where the key and tile treatments live.
         paper: {
           DEFAULT: 'var(--paper)',
-          raised: 'var(--paper-raised)',
           recess: 'var(--paper-recess)',
         },
         ink: {
           DEFAULT: 'var(--ink)',
           red: 'var(--ink-red)',
         },
-        knockout: 'var(--knockout)',
         ghost: 'var(--ghost)',
         rule: 'var(--rule)',
       },

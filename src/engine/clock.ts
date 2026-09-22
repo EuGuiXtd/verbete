@@ -1,9 +1,5 @@
 import { EPOCH_DAY_KEY, TIME_ZONE } from './constants';
 
-export interface Clock {
-  now(): number;
-}
-
 const MS_PER_DAY = 86_400_000;
 
 // "en-CA" formats as YYYY-MM-DD, which saves reassembling the parts by hand.

@@ -13,8 +13,8 @@ afterEach(() => {
 
 describe('Toast', () => {
   it('shows the message it was given', () => {
-    render(<Toast id={1} message="Faltam letras" onDismiss={() => {}} />);
-    expect(screen.getByText('Faltam letras')).toBeDefined();
+    render(<Toast id={1} message="A palavra tem cinco letras" onDismiss={() => {}} />);
+    expect(screen.getByText('A palavra tem cinco letras')).toBeDefined();
   });
 
   it('dismisses itself after its display window, passing back its own id', () => {
@@ -35,7 +35,7 @@ describe('Toast', () => {
 
   it('clears its timer on unmount, so a stale dismiss never fires', () => {
     const onDismiss = vi.fn();
-    const { unmount } = render(<Toast id={1} message="Faltam letras" onDismiss={onDismiss} />);
+    const { unmount } = render(<Toast id={1} message="A palavra tem cinco letras" onDismiss={onDismiss} />);
 
     unmount();
     act(() => {

@@ -4,8 +4,8 @@ import type { ReactNode } from 'react';
 import { MatchProvider } from '../MatchProvider';
 import { useMatch } from '../useMatch';
 import { dayKeyOf } from '../../engine/clock';
-import { loadHistory, loadPrefs, loadProgress, loadStats, savePrefs, saveProgress } from '../../storage/repository';
-import { progressKey } from '../../storage/keys';
+import { loadHistory, loadPrefs, loadProgress, loadRecent, loadStats, savePrefs, saveProgress } from '../../storage/repository';
+import { progressKey, recentKey } from '../../storage/keys';
 import type { Mode, Variant } from '../../engine/types';
 
 // A small, deterministic stand-in for the real 1500-word daily pool — must
@@ -28,11 +28,15 @@ function saveRawProgress(variant: Variant, mode: Mode, data: Record<string, unkn
   localStorage.setItem(progressKey(variant, mode), JSON.stringify({ v: 1, data }));
 }
 
+/** Every exclusion set `createInfiniteMatch` has handed to `pickRandomAnswer`, in order. */
+const excludeCalls: string[][] = [];
+
 vi.mock('../../data/dictionary', () => ({
   isValidGuess: (word: string) => VALID_GUESSES.has(word),
   dailyPool: () => DAILY_POOL,
   DICTIONARY_VERSION: 'test-fixture',
-  pickRandomAnswer: () => {
+  pickRandomAnswer: (exclude: ReadonlySet<string>) => {
+    excludeCalls.push([...exclude]);
     const answer = infiniteAnswers[infiniteAnswerIndex % infiniteAnswers.length]!;
     infiniteAnswerIndex += 1;
     return answer;
@@ -53,6 +57,7 @@ function typeWord(result: { current: ReturnType<typeof useMatch> }, word: string
 
 beforeEach(() => {
   infiniteAnswerIndex = 0;
+  excludeCalls.length = 0;
   localStorage.clear();
   // C4: MatchProvider now opens on the variant/mode last used, defaulting to
   // Solo/Diário on a genuinely first visit. This suite was written against
@@ -122,6 +127,31 @@ describe('MatchProvider persistence', () => {
         lastMode: 'infinito',
       });
     });
+  });
+
+  it("records infinite mode's answers as 'recent', the key the quota ladder clears (I7)", () => {
+    // Nothing wrote `verbete:recent:*` before this, so `clearRecent` — the
+    // middle rung of safeStorage's escalation ladder — freed zero bytes, and
+    // infinite mode repeated words across sessions.
+    expect(localStorage.getItem(recentKey('solo'))).toBeNull();
+    renderHook(() => useMatch(), { wrapper });
+    expect(loadRecent('solo')).toEqual(['casal']);
+  });
+
+  it('excludes every remembered word from the next infinite draw, across a reload', () => {
+    // The stub walks `infiniteAnswers` in order and ignores the exclusion
+    // set, so this asserts what `createInfiniteMatch` actually PASSES rather
+    // than what a stub chose to do with it.
+    renderHook(() => useMatch(), { wrapper });
+    expect(loadRecent('solo')).toEqual(['casal']);
+    cleanup();
+
+    // A reload: the recent list is the only thing carrying "casal" forward,
+    // because the fresh provider has no previous match in memory to exclude.
+    localStorage.removeItem(progressKey('solo', 'infinito'));
+    excludeCalls.length = 0;
+    renderHook(() => useMatch(), { wrapper });
+    expect(excludeCalls[0]).toContain('casal');
   });
 
   it('restores a committed guess across a remount, keeping the original secret answer', () => {

@@ -92,7 +92,13 @@ jobs:
     name: Deploy to production
     needs: e2e
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`: this job's rsync client is the one input
+    # that has to keep matching deploy-wrapper.sh's byte-exact allowlist for
+    # the compat block it sends (`-logDtprze.iLsfxCIvu`). A runner image
+    # rolling forward to a different rsync major is the one way that
+    # allowlist can start refusing a legitimate deploy with nothing in this
+    # repository having changed.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Scopes VPS_SSH_KEY/VPS_HOST/VPS_USER/VPS_HOST_KEY_FINGERPRINT to this
     # job and this environment: see README.md's "Configuração de
@@ -197,9 +203,10 @@ jobs:
           cat /tmp/vps_host_key.pub >> "$HOME/.ssh/known_hosts"
 
       # A single rsync, matched byte-for-byte against what
-      # deploy/vps/deploy-wrapper.sh accepts (see
-      # .superpowers/sdd/2026-09-20-verbete/task-27-report.md for how this
-      # was verified).
+      # deploy/vps/deploy-wrapper.sh accepts. This exact shape
+      # (`-az --delete-after`) is pinned as a case in
+      # deploy/vps/test-deploy-wrapper.sh and rehearsed by
+      # deploy/vps/05-deploy-key.sh, so changing it here fails there.
       #
       # `--delete-after` instead of a bare `--delete`: rsync only removes a
       # file with no replacement once the WHOLE transfer has landed, not

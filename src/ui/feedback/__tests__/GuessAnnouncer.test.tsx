@@ -10,7 +10,7 @@ describe('GuessAnnouncer', () => {
   it('renders two separate polite, atomic live regions — one for the row/outcome text, one for the definition', () => {
     render(
       <GuessAnnouncer
-        text="Linha 1: C correta, A ausente, S ausente, A ausente, L ausente."
+        text="Tentativa 1: C correta, A ausente, S ausente, A ausente, L ausente."
         definitionText="Definição de casal: par de pessoas que vivem juntas."
       />,
     );
@@ -23,7 +23,7 @@ describe('GuessAnnouncer', () => {
     }
 
     const texts = regions.map((region) => region.textContent);
-    expect(texts).toContain('Linha 1: C correta, A ausente, S ausente, A ausente, L ausente.');
+    expect(texts).toContain('Tentativa 1: C correta, A ausente, S ausente, A ausente, L ausente.');
     expect(texts).toContain('Definição de casal: par de pessoas que vivem juntas.');
   });
 
@@ -36,11 +36,11 @@ describe('GuessAnnouncer', () => {
   // place — appending to one shared string could pass every assertion
   // above while still reintroducing the bug.
   it('keeps the two regions independent — the definition never gets folded into the row/outcome text', () => {
-    const { rerender } = render(<GuessAnnouncer text="Linha 1: ..." definitionText="" />);
-    rerender(<GuessAnnouncer text="Linha 1: ..." definitionText="Definição de casal: par de pessoas." />);
+    const { rerender } = render(<GuessAnnouncer text="Tentativa 1: ..." definitionText="" />);
+    rerender(<GuessAnnouncer text="Tentativa 1: ..." definitionText="Definição de casal: par de pessoas." />);
 
     const regions = screen.getAllByRole('status');
-    const rowRegion = regions.find((r) => r.textContent === 'Linha 1: ...');
+    const rowRegion = regions.find((r) => r.textContent === 'Tentativa 1: ...');
     const definitionRegion = regions.find((r) => r.textContent === 'Definição de casal: par de pessoas.');
     expect(rowRegion).toBeDefined();
     expect(definitionRegion).toBeDefined();
@@ -48,7 +48,7 @@ describe('GuessAnnouncer', () => {
   });
 
   it('is visually hidden — sr-only, not a visible toast', () => {
-    render(<GuessAnnouncer text="Linha 1: ..." definitionText="" />);
+    render(<GuessAnnouncer text="Tentativa 1: ..." definitionText="" />);
     for (const region of screen.getAllByRole('status')) {
       expect(region.className).toContain('sr-only');
     }

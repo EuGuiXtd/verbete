@@ -79,7 +79,7 @@ export function Header() {
         <button
           type="button"
           className="tecla px-3"
-          aria-label="Ajuda"
+          aria-label="Como jogar"
           onClick={(event: MouseEvent<HTMLButtonElement>) => {
             blurOnMouseActivation(event);
             setOpenModal('help');
@@ -101,7 +101,7 @@ export function Header() {
         <button
           type="button"
           className="tecla px-3"
-          aria-label={`Tema: ${THEME_LABEL[theme]}. Toque para alternar.`}
+          aria-label={`Tema: ${THEME_LABEL[theme]} — alternar`}
           onClick={(event: MouseEvent<HTMLButtonElement>) => {
             blurOnMouseActivation(event);
             setTheme(NEXT_THEME[theme]);

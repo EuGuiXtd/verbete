@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 /**
  * Everything Verbete needs to play a match ships as data — no backend, no
- * API (see this task's report). Offline play is therefore a packaging
+ * API. Offline play is therefore a packaging
  * problem: precache the built assets, including the definitions chunk
  * `src/data/definitions.ts` dynamically imports (see that file's own doc
  * comment), and register a service worker that updates itself in the

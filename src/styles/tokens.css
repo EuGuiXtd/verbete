@@ -26,13 +26,12 @@
  *
  * That separation is what buys colour accessibility without a second
  * "colour-blind palette", and it is the thing that makes this game not look
- * like every other Wordle clone. If you change --ink or --ink-red, re-run the
- * greyscale check in .superpowers/sdd/2026-09-20-verbete/design/ first — with
- * `filter: grayscale()` luma, the method above, not a linear-light one (they
- * disagree by ~18 grey levels on --ink-red and will send you chasing a
- * mismatch that isn't there).
+ * like every other Wordle clone. If you change --ink or --ink-red, re-check
+ * them in greyscale first — with `filter: grayscale()` luma, the method
+ * above, not a linear-light one (they disagree by ~18 grey levels on
+ * --ink-red and will send you chasing a mismatch that isn't there).
  *
- * Contrast floors this palette holds (see the task-15 report for the table):
+ * Contrast floors this palette holds:
  *   --ink on --paper            >= 13:1
  *   --ghost on any paper tone   >= 4.5:1   (the absent letter must be read)
  *   --knockout on --ink-red     >= 4.5:1   (the knocked-out letter)

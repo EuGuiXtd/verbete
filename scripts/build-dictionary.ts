@@ -31,9 +31,8 @@
 //
 // Run with: pnpm dict:build
 //
-// Pipeline (see .superpowers/sdd/2026-09-20-verbete/task-8-brief.md, as
-// amended by the controller after the first version of this pipeline shipped
-// a real bug — see "head-form authority" below):
+// Pipeline (amended after the first version shipped a real bug — see
+// "head-form authority" below, and the C1 note in data/SOURCES.md):
 //   1. Expand pt_BR.dic against pt_BR.aff (affix rules) with hunspell-reader.
 //   2. Keep forms whose NFC length is exactly five Latin letters.
 //   3. Drop tokens that appear only capitalized in the .dic (proper nouns,

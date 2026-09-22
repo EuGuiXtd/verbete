@@ -76,7 +76,13 @@ function trimHistory(): void {
   }
 }
 
-/** Best-effort: clears every variant's "recently played" list. */
+/**
+ * Best-effort: clears every variant's "recently played" list — the infinite
+ * mode anti-repeat set written by `rememberRecent`. Purely a convenience,
+ * which is why it sits above `dropFinishedProgress` on the ladder: losing it
+ * costs the player at most a repeated word, while dropping a finished match's
+ * progress record loses something they did.
+ */
 function clearRecent(): void {
   for (const variant of ALL_VARIANTS) {
     try {

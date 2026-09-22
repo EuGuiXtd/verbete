@@ -121,7 +121,7 @@ test.describe('screen-reader announcements (Task 25)', () => {
     // fail by construction — the condition and the assertion were the same
     // check). This fails if even one of the five is missing, malformed, or
     // not one of the three real labels.
-    const match = text?.match(/^Linha 2: C (.+), A (.+), S (.+), A (.+), S (.+)\.$/);
+    const match = text?.match(/^Tentativa 2: C (.+), A (.+), S (.+), A (.+), S (.+)\.$/);
     expect(match).not.toBeNull();
     const validLabels = new Set(['correta', 'na posição errada', 'ausente']);
     for (const label of match!.slice(1)) {
@@ -148,7 +148,7 @@ test.describe('screen-reader announcements (Task 25)', () => {
     const body = text!;
     // The guess is spelled out once, up front...
     const spelled = solvingGuess.split('').join(' ');
-    expect(body).toContain(`tentativa ${spelled}`);
+    expect(body).toContain(`Tentativa 1: ${spelled}.`);
     // ...board 1 is explicitly named as solved...
     expect(body).toContain('Tabuleiro 1, resolvido');
     // ...all four boards are reported...
@@ -175,7 +175,7 @@ test.describe('screen-reader announcements (Task 25)', () => {
         wonEarly = true;
         // A loss also names the real word (F2) — checked against the
         // ACTUAL generated dictionary here, not a mock.
-        expect(text).toMatch(/Fim de jogo: você (venceu!|não acertou dessa vez\. A palavra era [a-zà-ÿ]+\.)$/);
+        expect(text).toMatch(/Fim de jogo: (você acertou!|não foi dessa vez\. A palavra era [a-zà-ÿ]+\.)$/);
         break;
       }
     }
@@ -241,7 +241,7 @@ test.describe('keyboard reachability (Task 25)', () => {
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
     const expectedNames = [
-      'Ajuda',
+      'Como jogar',
       'Estatísticas',
       /^Tema:/,
       'Solo',
@@ -301,7 +301,7 @@ test.describe('focus trap (Task 25)', () => {
     await page.goto('/');
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
-    const ajudaButton = page.getByRole('button', { name: 'Ajuda' });
+    const ajudaButton = page.getByRole('button', { name: 'Como jogar' });
     await ajudaButton.focus();
     await page.keyboard.press('Enter');
 
@@ -327,7 +327,7 @@ test.describe('focus trap (Task 25)', () => {
     await page.goto('/');
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Ajuda' }).click();
+    await page.getByRole('button', { name: 'Como jogar' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 

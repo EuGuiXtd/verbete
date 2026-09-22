@@ -64,10 +64,41 @@ export function loadHistory(): readonly HistoryEntry[] {
   return readSlice<readonly HistoryEntry[]>(store, historyKey(), 'history') ?? [];
 }
 
+/**
+ * How many recent infinite answers to remember per variant. Large enough that
+ * a session's worth of play never repeats, small enough that it stays a tiny
+ * fraction of the answer pool — `pickRandomAnswer` samples against this set,
+ * and an exclusion list approaching the pool size would make it thrash and
+ * then fall back to the full pool anyway.
+ */
+const RECENT_LIMIT = 100;
+
 export function loadRecent(variant: Variant): readonly string[] {
-  return readSlice<readonly string[]>(store, recentKey(variant), `recent:${variant}`) ?? [];
+  const stored = readSlice<readonly string[]>(store, recentKey(variant), `recent:${variant}`) ?? [];
+  // Unvalidated like every other slice (see loadPrefs): a hand-edited or
+  // corrupt record must not reach `pickRandomAnswer`'s exclusion set as
+  // something that is not an array of strings.
+  return Array.isArray(stored) ? stored.filter((word) => typeof word === 'string') : [];
 }
 
 export function saveRecent(variant: Variant, words: readonly string[]): boolean {
   return writeSlice(store, recentKey(variant), words);
+}
+
+/**
+ * Appends `answers` to `variant`'s recent list, oldest first out, without
+ * duplicating a word already in it. Idempotent: calling it twice with the
+ * same answers leaves the same list, which is what lets the caller be a plain
+ * effect rather than something that has to fire exactly once.
+ *
+ * This is what makes `verbete:recent:*` a key that actually exists. Until the
+ * final review (I7) nothing wrote it, which quietly made `clearRecent` — the
+ * middle rung of `safeStorage`'s quota-recovery ladder — free zero bytes, and
+ * left infinite mode repeating words across sessions even though the storage
+ * layer had been built to stop exactly that.
+ */
+export function rememberRecent(variant: Variant, answers: readonly string[]): boolean {
+  const fresh = new Set(answers);
+  const merged = [...loadRecent(variant).filter((word) => !fresh.has(word)), ...answers];
+  return saveRecent(variant, merged.slice(-RECENT_LIMIT));
 }
