@@ -317,8 +317,26 @@
     flex: 1 1 0%;
   }
 
+  /*
+   * The blind deboss, not just the paper tone. Its single-board sibling
+   * `.tecla-ausente` above sets `background-color` AND `press-in`, and the
+   * deboss is what makes the third state a state at all: this design
+   * language separates the three by VALUE as well as hue, which is what
+   * buys colour accessibility without a second palette.
+   *
+   * Without it, a key absent on every board rendered as bare page paper
+   * with a faint --ghost letter and no silhouette whatsoever — invisible,
+   * and still a clickable 44x44 target. The band has to carry it rather
+   * than the button: `.tecla-multipla-fundo` is `position: absolute;
+   * inset: 0`, so it paints over the button's own `--paper-raised` fill and
+   * over both inset layers of its `press-out`. Whatever the band does not
+   * draw itself is not drawn. `.tecla-segmento-presente` and
+   * `.tecla-segmento-certa` need no equivalent: --ink-red and --ink are
+   * their own silhouette against the sheet.
+   */
   .tecla-segmento-ausente {
     background-color: var(--paper);
+    box-shadow: theme('boxShadow.press-in');
   }
 
   .tecla-segmento-presente {
