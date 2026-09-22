@@ -73,8 +73,21 @@ export function Board({ state, boardIndex, shakeToken = 0, compact = false }: Bo
       ? 'flex w-full flex-col gap-1'
       : 'flex w-full flex-col gap-2';
 
+  // Task 25 fix round 1 (F4): `aria-disabled` on a plain, role-less `<div>`
+  // is not exposed as state by any accessibility tree — it only does
+  // anything on an element whose role already supports a disabled/dimmed
+  // concept. `role="group"` gives it exactly that, and — the actual gap —
+  // gives every board an accessible NAME of its own for the first time.
+  // Without one, a Quarteto match reads to a screen reader as four
+  // undifferentiated runs of tiles with nothing marking where one board
+  // ends and the next begins; matches this task's own "Tabuleiro N" wording
+  // in the live-region announcement (src/state/announce.ts) so the number a
+  // player hears there is the same number they land on navigating the board
+  // directly.
+  const boardLabel = solved ? `Tabuleiro ${String(boardIndex + 1)}, resolvido` : `Tabuleiro ${String(boardIndex + 1)}`;
+
   return (
-    <div className={wrapperClass} aria-disabled={solved ? true : undefined}>
+    <div className={wrapperClass} role="group" aria-label={boardLabel} aria-disabled={solved ? true : undefined}>
       {/*
        * Task 25: a frozen board used to signal "done" through `opacity-60`
        * alone. At Quarteto's compact tile size that dimming reads as too
@@ -88,11 +101,11 @@ export function Board({ state, boardIndex, shakeToken = 0, compact = false }: Bo
        * fade, fixes the ambiguity outright regardless of tile size — see
        * this task's report for why a caption was chosen over deepening the
        * opacity. `aria-hidden`: purely a sighted affordance: a screen-reader
-       * user already gets "resolvido" from `aria-disabled` on this same
-       * element and from the live-region announcement (GuessAnnouncer.tsx)
-       * the instant the board actually solved — this text would only repeat
-       * that, silently, on every subsequent guess a screen reader visits
-       * this board.
+       * user already gets "resolvido" from this board's own `aria-label`
+       * (see `boardLabel` above) and from the live-region announcement
+       * (GuessAnnouncer.tsx) the instant the board actually solved — this
+       * text would only repeat that, silently, on every subsequent guess a
+       * screen reader visits this board.
        */}
       {solved && (
         <p className="text-micro italic uppercase tracking-wide text-ghost" aria-hidden="true">

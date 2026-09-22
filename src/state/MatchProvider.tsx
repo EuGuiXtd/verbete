@@ -15,10 +15,11 @@ import { dailyAnswers, dailyNumber as computeDailyNumber } from '../engine/daily
 import { VARIANTS, VARIANT_ORDER, WORD_LENGTH } from '../engine/constants';
 import type { Mode, Variant } from '../engine/types';
 import { DICTIONARY_VERSION, dailyPool, isValidGuess, pickRandomAnswer } from '../data/dictionary';
+import { loadDefinition } from '../data/definitions';
 import { appendHistory, loadProgress, saveProgress } from '../storage/repository';
 import { computeAnswersHash } from '../storage/schema';
 import type { ProgressRecord } from '../storage/schema';
-import { buildAnnouncement } from './announce';
+import { buildAnnouncement, buildDefinitionsAnnouncement } from './announce';
 import { useReveal } from './useReveal';
 import { useDailyRollover } from './useDailyRollover';
 import { useStats } from './useStats';
@@ -60,10 +61,15 @@ export interface MatchContextValue {
    * the most recently accepted guess revealed — see buildAnnouncement's own
    * doc comment in src/state/announce.ts for the exact shape and why it
    * differs between Solo and a multi-board variant. Empty until the first
-   * guess of a session is accepted; stays at its last value afterwards
-   * rather than clearing between guesses, since an aria-live region only
-   * announces on a text CHANGE and every accepted guess produces new text
-   * anyway (a repeated guess is rejected before ever reaching this).
+   * guess of THIS match is accepted; stays at its last value between one
+   * guess and the next within the same match (an aria-live region only
+   * announces on a text CHANGE, and every accepted guess produces new text
+   * anyway — a repeated guess is rejected before ever reaching this) but is
+   * explicitly cleared by `newMatch`/`selectMode`/`applyDailyRollover` (Task
+   * 25 fix round 1, F8): without that, stale text from a match just left
+   * could survive into a freshly started one, and if that new match's own
+   * first row happened to produce byte-identical text, the live region
+   * would never announce it at all.
    */
   readonly announcement: string;
   readonly dismissToast: (id: number) => void;
@@ -636,6 +642,29 @@ export function MatchProvider({ children }: MatchProviderProps) {
         buildAnnouncement({ state: activeMatch, guessIndex: announcedGuessIndex, solvedBoardIndexes, finishedStatus }),
       );
     }
+    if (finishedStatus !== null) {
+      // The dictionary-definition line: appended as a SECOND, later update
+      // to the SAME live region, once every board's definition has actually
+      // loaded — never blocking the win/loss line above on an async dynamic
+      // import (`loadDefinition`'s own doc comment: the definitions chunk is
+      // ~35KB gzipped, fetched only now, for the first time this session).
+      // `firedForKey` freezes exactly which match this belongs to; the
+      // `.then()` re-reads `latestRef` (not a captured `slice.active`/
+      // `activeMatch`, both stale by the time this resolves) and discards
+      // the result if the player has since switched away or started another
+      // match in the same slot — the same staleness class `submit()`'s own
+      // `latestRef` guard exists for, just resolved asynchronously instead
+      // of on every render.
+      const firedForKey = `${matchKey(slice.active)}:${String(activeMatch.finishedAt)}`;
+      const boards = activeMatch.boards;
+      void Promise.all(boards.map((board) => loadDefinition(board.answer))).then((rawDefinitions) => {
+        const currentKey = `${matchKey(latestRef.current.active)}:${String(latestRef.current.match.finishedAt)}`;
+        if (currentKey !== firedForKey) return;
+        const definitionsLine = buildDefinitionsAnnouncement(boards, rawDefinitions);
+        if (definitionsLine === '') return;
+        setAnnouncement((current) => `${current} ${definitionsLine}`);
+      });
+    }
     dispatchProvider({ type: 'EFFECTS_FLUSHED' });
   }, [slice.pendingEffects, slice.active, activeMatch, reveal, stats]);
 
@@ -668,6 +697,15 @@ export function MatchProvider({ children }: MatchProviderProps) {
     dispatchProvider({ type: 'NEW_MATCH' });
     setToasts([]);
     setShakeToken(0);
+    // Task 25 fix round 1 (F8): `announcement` used to be provider-level and
+    // never reset, so stale text from the match just left survived into the
+    // new one — and if the new match's very first row happened to produce
+    // byte-identical text (a real possibility: the sentence template is the
+    // same regardless of which random word was drawn), the live region would
+    // never announce it at all, since aria-live only fires on an actual text
+    // CHANGE. Clearing it here, exactly alongside the toasts/shakeToken this
+    // callback already resets for the same "starting fresh" reason.
+    setAnnouncement('');
   }, []);
 
   const selectMode = useCallback(
@@ -680,6 +718,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
       dispatchProvider({ type: 'SELECT_MODE', variant, mode });
       setToasts([]);
       setShakeToken(0);
+      setAnnouncement(''); // see newMatch's own comment on why this cannot be skipped
     },
     [flushActiveProgress],
   );
@@ -688,6 +727,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
     dispatchProvider({ type: 'APPLY_DAILY_ROLLOVER', variant: slice.active.variant });
     setToasts([]);
     setShakeToken(0);
+    setAnnouncement(''); // see newMatch's own comment on why this cannot be skipped
   }, [slice.active.variant]);
 
   const dailyNumber = activeMatch.dayKey !== null ? computeDailyNumber(activeMatch.dayKey) : null;

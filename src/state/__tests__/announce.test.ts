@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatch, reduce } from '../../engine/match';
 import type { EngineDeps, MatchState } from '../../engine/match';
-import { buildAnnouncement } from '../announce';
+import { buildAnnouncement, buildDefinitionsAnnouncement } from '../announce';
 
 const deps: EngineDeps = { isValidGuess: () => true, now: () => 1_000 };
 
@@ -71,7 +71,10 @@ describe('buildAnnouncement', () => {
       finishedStatus: round.finished,
     });
 
-    expect(text.endsWith('Fim de jogo: você não acertou dessa vez.')).toBe(true);
+    // Task 25 fix round 1 (F2): a lost match also names the still-unsolved
+    // word — the one thing a sighted player still gets from ResultModal's
+    // own reveal that a screen-reader user otherwise never learns at all.
+    expect(text.endsWith('Fim de jogo: você não acertou dessa vez. A palavra era fungo.')).toBe(true);
   });
 
   it('returns an empty string for an out-of-range guess index rather than throwing', () => {
@@ -113,6 +116,44 @@ describe('buildAnnouncement', () => {
       );
     });
 
+    it('drops a board frozen by an earlier guess from a later announcement, naming which boards are still in play (Task 25 fix round 1, F1)', () => {
+      // The Critical bug this regresses: the first version of buildMultiBody
+      // re-scored the new guess against every board's `answerNorm` directly,
+      // with no reference to `solvedAt` — so a board already frozen kept
+      // getting fresh, fabricated per-letter results on every later guess,
+      // confirmed live in a real Quarteto run (guess 2 announced results
+      // for a board that solved on guess 1 and never played again).
+      const state = createMatch({
+        variant: 'quarteto',
+        mode: 'infinito',
+        dayKey: null,
+        answers: ['cobra', 'casal', 'salta', 'fungo'],
+        startedAt: 0,
+      });
+      const first = submit(state, 'CASAL'); // solves board index 1 ("casal") outright
+      expect(first.solved).toEqual([1]);
+
+      const second = submit(first.state, 'TERRA');
+      expect(second.solved).toEqual([]); // no board newly solved this guess
+
+      const text = buildAnnouncement({
+        state: second.state,
+        guessIndex: 1,
+        solvedBoardIndexes: second.solved,
+        finishedStatus: second.finished,
+      });
+
+      expect(text).toBe(
+        'Linha 2, tentativa T E R R A. Tabuleiros em jogo: 1, 3 e 4. ' +
+          'Tabuleiro 1: ausente, ausente, ausente, correta, correta. ' +
+          'Tabuleiro 3: na posição errada, ausente, ausente, ausente, correta. ' +
+          'Tabuleiro 4: ausente, ausente, ausente, ausente, ausente.',
+      );
+      // Board 2 ("casal", frozen since guess 1) must not appear at all —
+      // not with stale results, not with fabricated new ones.
+      expect(text).not.toContain('Tabuleiro 2');
+    });
+
     it('never repeats a letter once per board — the noise the brief warns about', () => {
       const state = createMatch({
         variant: 'quarteto',
@@ -139,6 +180,26 @@ describe('buildAnnouncement', () => {
       for (const letter of ['C', 'A', 'S', 'L']) {
         expect(afterSpelling).not.toMatch(new RegExp(`\\b${letter}\\b`));
       }
+    });
+  });
+
+  describe('buildDefinitionsAnnouncement (Task 25 fix round 1, F2)', () => {
+    it('states one board\'s definition directly, without a board number nobody needs for Solo', () => {
+      expect(buildDefinitionsAnnouncement([{ answer: 'cobra' }], ['s.f. réptil sem patas'])).toBe(
+        'Definição de cobra: réptil sem patas.',
+      );
+    });
+
+    it('lists every board with a definition, semicolon-separated, for a multi-board match', () => {
+      const text = buildDefinitionsAnnouncement(
+        [{ answer: 'cobra' }, { answer: 'casal' }, { answer: 'fungo' }],
+        ['s.f. réptil sem patas', 's.m. par de pessoas', null],
+      );
+      expect(text).toBe('Definições — cobra: réptil sem patas; casal: par de pessoas.');
+    });
+
+    it('returns an empty string when no board has a generated definition, rather than an empty label', () => {
+      expect(buildDefinitionsAnnouncement([{ answer: 'cobra' }], [null])).toBe('');
     });
   });
 });

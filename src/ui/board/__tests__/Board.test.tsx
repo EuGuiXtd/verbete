@@ -108,6 +108,40 @@ describe('Board', () => {
     });
   });
 
+  // Task 25 fix round 1 (F4, Important): `aria-disabled` on a role-less
+  // `<div>` is not exposed as state by any accessibility tree, and no board
+  // had an accessible name of its own at all — a Quarteto match read as
+  // four undifferentiated runs of tiles with nothing marking where one
+  // board ends and the next begins.
+  describe('accessible name (role="group" + aria-label)', () => {
+    it('names a still-playing board by its 1-based position, with no "resolvido" in it', () => {
+      const state = make();
+      render(<Board state={state} boardIndex={0} />);
+      const group = screen.getByRole('group', { name: 'Tabuleiro 1' });
+      expect(group).toBeDefined();
+    });
+
+    it('names a solved board as resolved — the same wording the live-region announcement uses', () => {
+      let state = make();
+      state = type(state, 'CASAL'); // solves it
+      render(<Board state={state} boardIndex={0} />);
+      const group = screen.getByRole('group', { name: 'Tabuleiro 1, resolvido' });
+      expect(group).toBeDefined();
+    });
+
+    it('numbers a board by its own index, not always "1"', () => {
+      const state = createMatch({
+        variant: 'quarteto',
+        mode: 'infinito',
+        dayKey: null,
+        answers: ['casal', 'terra', 'prato', 'falar'],
+        startedAt: 0,
+      });
+      render(<Board state={state} boardIndex={2} compact />);
+      expect(screen.getByRole('group', { name: 'Tabuleiro 3' })).toBeDefined();
+    });
+  });
+
   describe('shakeToken', () => {
     it('does not shake any row when shakeToken is 0 (no rejection yet)', () => {
       const state = type(make(), 'TERRA');

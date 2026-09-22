@@ -54,14 +54,19 @@ test.describe('screen-reader announcements (Task 25)', () => {
     await submit(page, 'CASAS');
 
     const text = await announcer(page).textContent();
-    expect(text).toMatch(/^Linha 2: C .+, A .+, S .+, A .+, S .+\.$/);
-    // Every letter gets its own named result — the per-tile detail a
-    // screen-reader user cannot get any other way.
-    for (const label of ['correta', 'na posição errada', 'ausente']) {
-      // At least one of the three labels must appear (which ones depend on
-      // the random answer) — this just proves real per-letter vocabulary
-      // made it into the sentence, not a placeholder.
-      if (text?.includes(label)) expect(text).toContain(label);
+    // Captures each of the five results, then checks every ONE of them is
+    // exactly a real label — not merely that the sentence matches a loose
+    // shape, and not merely that "at least one" real word appears somewhere
+    // (Task 25 fix round 1, F5: the original version of this assertion,
+    // `if (text.includes(label)) expect(text).toContain(label)`, could not
+    // fail by construction — the condition and the assertion were the same
+    // check). This fails if even one of the five is missing, malformed, or
+    // not one of the three real labels.
+    const match = text?.match(/^Linha 2: C (.+), A (.+), S (.+), A (.+), S (.+)\.$/);
+    expect(match).not.toBeNull();
+    const validLabels = new Set(['correta', 'na posição errada', 'ausente']);
+    for (const label of match!.slice(1)) {
+      expect(validLabels.has(label)).toBe(true);
     }
   });
 
@@ -104,12 +109,19 @@ test.describe('screen-reader announcements (Task 25)', () => {
 
     const guesses = ['CASAS', 'HORAS', 'TERRA', 'PRATO', 'FINDO', 'CLARO'];
     let wonEarly = false;
+    let finalText = '';
     for (const word of guesses) {
       await submit(page, word);
       const text = await announcer(page).textContent();
       if (text?.includes('Fim de jogo')) {
         wonEarly = true;
-        expect(text).toMatch(/Fim de jogo: você (venceu!|não acertou dessa vez\.)$/);
+        finalText = text;
+        // Not end-anchored: a loss also names the word (F2), and by the
+        // time this fires the async dictionary-definition line (also F2)
+        // may already have landed too — both are additional, later
+        // information, not a reason this core outcome sentence should stop
+        // being present.
+        expect(text).toMatch(/Fim de jogo: você (venceu!|não acertou dessa vez\.)/);
         break;
       }
     }
@@ -118,6 +130,15 @@ test.describe('screen-reader announcements (Task 25)', () => {
     // identical guess list and reasoning) — so the loop above must have
     // found the outcome sentence before running out of guesses.
     expect(wonEarly).toBe(true);
+
+    // Task 25 fix round 1 (F2): a loss must also name the real word — this
+    // is the one assertion in this suite that exercises F2 against the
+    // ACTUAL generated dictionary (src/data/answers.generated.ts /
+    // definitions.generated.json), not a mock, so a real lowercase word
+    // must appear after "A palavra era".
+    if (finalText.includes('não acertou')) {
+      expect(finalText).toMatch(/A palavra era [a-zà-ÿ]+\./);
+    }
     await expect(page.getByRole('dialog')).toBeVisible();
   });
 });
@@ -230,37 +251,113 @@ test.describe('focus trap (Task 25)', () => {
   });
 });
 
-test.describe('reduced motion (Task 25)', () => {
-  test.use({ reducedMotion: 'reduce' });
-
-  test('a scored tile carries its real ink colour immediately, with every duration collapsed to effectively zero', async ({
-    page,
-  }) => {
+test.describe('focus ring clipping (Task 25 fix round 1, F3)', () => {
+  test('a focused key\'s focus ring fits entirely inside its scrollable row, not clipped by it', async ({ page }) => {
     await page.goto('/');
+    await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
+
+    // "Q": the first key in its row — the one whose ring the reviewer found
+    // clipped on THREE sides (top, bottom, and left, since the row's own
+    // scrollport starts flush at its left edge — see Keyboard.tsx's own
+    // doc comment). If the fix holds here it holds for every ordinary key,
+    // whose ring only ever risked the top/bottom clipping every key shared.
+    const qKey = page.getByRole('button', { name: 'Q', exact: true });
+    await qKey.focus();
+
+    const geometry = await page.evaluate(() => {
+      const key = document.activeElement as HTMLElement;
+      const row = key.closest('.overflow-x-auto') as HTMLElement | null;
+      if (!row) return null;
+      const keyRect = key.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      const cs = getComputedStyle(key);
+      const protrusion = parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset);
+      return {
+        ringTop: keyRect.top - protrusion,
+        ringBottom: keyRect.bottom + protrusion,
+        ringLeft: keyRect.left - protrusion,
+        rowTop: rowRect.top,
+        rowBottom: rowRect.bottom,
+        rowLeft: rowRect.left,
+      };
+    });
+
+    expect(geometry).not.toBeNull();
+    const g = geometry!;
+    // The row's own box (padding included) is the clipping boundary for its
+    // `overflow-x-auto` (and computed `overflow-y: auto`) — the ring must
+    // land entirely inside it, not merely up against its edge.
+    expect(g.ringTop).toBeGreaterThanOrEqual(g.rowTop - 0.5);
+    expect(g.ringBottom).toBeLessThanOrEqual(g.rowBottom + 0.5);
+    expect(g.ringLeft).toBeGreaterThanOrEqual(g.rowLeft - 0.5);
+  });
+});
+
+test.describe('reduced motion (Task 25)', () => {
+  /**
+   * Task 25 fix round 1 (F6): the previous version of this test claimed, in
+   * both its own comment and this task's report, to compare a captured
+   * background colour between motion states — it never actually read one,
+   * and `not.toContain('0.14s')` is not a real proof that the override
+   * applied (it would also pass at, say, "0.5s"). This version captures the
+   * SAME tile's real background colour and transition duration under both
+   * `reduce` and `no-preference`, in two fresh contexts, and compares them
+   * directly. Both contexts play Solo's Diário mode specifically so the
+   * secret word — and therefore the scored colour — is identical in both
+   * (an `infinito` match draws a random word per context, which would make
+   * "the same colour" an accident of chance rather than a proven invariant).
+   */
+  async function scoreFirstTileUnder(
+    browser: import('@playwright/test').Browser,
+    reducedMotion: 'reduce' | 'no-preference',
+  ): Promise<{ color: string; transitionDuration: string; pressDuration: string }> {
+    const context = await browser.newContext({ reducedMotion });
+    const page = await context.newPage();
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Diário' }).click();
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
     await page.keyboard.type('CASAS');
     await page.keyboard.press('Enter');
-    // Deliberately NOT waiting out REVEAL_SETTLE_MS first: under reduced
-    // motion the colour must already be correct as soon as the tile exists,
-    // not merely after waiting for an animation that should not be running.
+    // Deliberately NOT waiting out REVEAL_SETTLE_MS under `reduce`: the
+    // colour must already be correct as soon as the tile exists, not merely
+    // after waiting for an animation that should not be running. Under
+    // `no-preference` the real reveal genuinely takes that long, so this
+    // waits for the tile to exist at all rather than a fixed delay either way.
     await expect(page.locator('[role="img"]')).toHaveCount(5);
+    if (reducedMotion === 'no-preference') await page.waitForTimeout(REVEAL_SETTLE_MS);
 
-    const durations = await page.evaluate(() => ({
-      press: getComputedStyle(document.documentElement).getPropertyValue('--press-duration').trim(),
-      reveal: getComputedStyle(document.documentElement).getPropertyValue('--reveal-duration').trim(),
-      shake: getComputedStyle(document.documentElement).getPropertyValue('--shake-duration').trim(),
-    }));
+    const result = await page.evaluate(() => {
+      const tile = document.querySelector('[role="img"]')!;
+      return {
+        color: getComputedStyle(tile).backgroundColor,
+        transitionDuration: getComputedStyle(tile).transitionDuration,
+        pressDuration: getComputedStyle(document.documentElement).getPropertyValue('--press-duration').trim(),
+      };
+    });
+    await context.close();
+    return result;
+  }
+
+  test('a scored tile\'s colour never depends on the reveal animation having run, only its transition timing does', async ({
+    browser,
+  }) => {
+    const reduced = await scoreFirstTileUnder(browser, 'reduce');
+    const normal = await scoreFirstTileUnder(browser, 'no-preference');
+
+    // The actual claim this task's design rests on: colour is applied by
+    // class, never by an animation, so it cannot differ by motion setting.
+    expect(reduced.color).toBe(normal.color);
+
     // getComputedStyle serialises a zero duration as "0s", not "0ms".
-    expect(durations).toEqual({ press: '0s', reveal: '0s', shake: '0s' });
-
-    const tileTransition = await page
-      .locator('[role="img"]')
-      .first()
-      .evaluate((el) => getComputedStyle(el).transitionDuration);
-    // 1ms, from index.css's `@media (prefers-reduced-motion: reduce)`
-    // `!important` catch-all — never the full 140ms press duration.
-    expect(tileTransition).not.toContain('0.14s');
+    expect(reduced.pressDuration).toBe('0s');
+    expect(normal.pressDuration).not.toBe('0s');
+    // 1ms under reduce (index.css's `@media (prefers-reduced-motion: reduce)`
+    // `!important` catch-all) — genuinely different from the real ~140ms
+    // press transition under no-preference, not just "does not contain
+    // 0.14s" (which "0.5s" would also satisfy without proving anything).
+    expect(reduced.transitionDuration).toBe('0.001s');
+    expect(reduced.transitionDuration).not.toBe(normal.transitionDuration);
   });
 });
 

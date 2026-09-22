@@ -9,7 +9,8 @@ import { useMatch } from '../useMatch';
 // and "assert this exact rejection reason" both flaky or roundabout.
 const answers = ['casal', 'terra', 'prato'];
 let answerIndex = 0;
-const isValidGuess = vi.fn((word: string) => word === 'CASAL' || word === 'TERRA' || word === 'PRATO');
+const DEFAULT_IS_VALID_GUESS = (word: string) => word === 'CASAL' || word === 'TERRA' || word === 'PRATO';
+const isValidGuess = vi.fn(DEFAULT_IS_VALID_GUESS);
 
 vi.mock('../../data/dictionary', () => ({
   isValidGuess: (word: string) => isValidGuess(word),
@@ -20,6 +21,31 @@ vi.mock('../../data/dictionary', () => ({
   },
   DICTIONARY_VERSION: 'test-fixture',
 }));
+
+/**
+ * Task 25 fix round 1 (F2): MatchProvider now loads each finished match's
+ * dictionary definition (`loadDefinition`, src/data/definitions.ts) to
+ * append to the same live-region announcement. Mocked here for the same
+ * reason the dictionary above is: a real ~35KB JSON import and whatever
+ * gloss the real generated data happens to carry for "casal" would make
+ * this file's exact-string assertions depend on content this suite does
+ * not own. `parseDefinition` is kept real (via `importOriginal`) — it is
+ * pure string-splitting logic, not data, and `src/state/announce.ts` needs
+ * the genuine implementation to turn `DEFINITIONS`'s raw strings below into
+ * the same shape production code produces.
+ */
+const DEFINITIONS: Record<string, string | null> = {
+  casal: 's.m. par de pessoas que vivem juntas',
+  terra: null,
+  prato: null,
+};
+vi.mock('../../data/definitions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../data/definitions')>();
+  return {
+    ...actual,
+    loadDefinition: (word: string) => Promise.resolve(DEFINITIONS[word] ?? null),
+  };
+});
 
 function wrapper({ children }: { children: ReactNode }) {
   return <MatchProvider>{children}</MatchProvider>;
@@ -36,6 +62,17 @@ function typeWord(result: { current: ReturnType<typeof useMatch> }, word: string
 beforeEach(() => {
   answerIndex = 0;
   isValidGuess.mockClear();
+  // Task 25 fix round 1 (F7): `.mockClear()` only resets call history, never
+  // a `.mockImplementation(...)` override an earlier test set — a real gap
+  // this suite already had, first exposed when the `announcement` tests
+  // below needed the default implementation restored after
+  // `'loses the match after maxAttempts wrong guesses'` overrides it and
+  // never puts it back. Restoring the default here, once, for every test,
+  // means any test that needs a different one still sets its own
+  // afterwards (as that loss test itself does) — this is not in tension
+  // with that, it just makes "the default" an actual guarantee rather than
+  // an accident of test order.
+  isValidGuess.mockImplementation(DEFAULT_IS_VALID_GUESS);
   // MatchProvider now restores from storage on mount/mode-switch: without
   // this, a later test in this file could "restore" a previous test's
   // leftover progress record instead of building the fresh match this
@@ -255,18 +292,40 @@ describe('useMatch', () => {
   });
 
   describe('announcement (Task 25: the aria-live sentence GuessAnnouncer.tsx reads aloud)', () => {
-    // Self-contained regardless of what an earlier test in this file left
-    // behind: `isValidGuess.mockClear()` in the outer `beforeEach` only
-    // resets call history, never a `.mockImplementation` override — a real
-    // gap this suite already had (an earlier test overrides it to reject
-    // "CASAL" specifically and never restores it), just never exercised
-    // before now because no test after it relied on the default again.
-    beforeEach(() => {
-      isValidGuess.mockImplementation((word: string) => word === 'CASAL' || word === 'TERRA' || word === 'PRATO');
-    });
-
     it('is empty before any guess is accepted', () => {
       const { result } = renderHook(() => useMatch(), { wrapper });
+      expect(result.current.announcement).toBe('');
+    });
+
+    it('clears on newMatch, so stale text cannot survive into a freshly started match (Task 25 fix round 1, F8)', () => {
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      typeWord(result, 'TERRA');
+      act(() => {
+        result.current.submit();
+      });
+      expect(result.current.announcement).not.toBe('');
+
+      act(() => {
+        result.current.newMatch();
+      });
+
+      expect(result.current.announcement).toBe('');
+    });
+
+    it('clears on selectMode too, for the same reason', () => {
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      typeWord(result, 'TERRA');
+      act(() => {
+        result.current.submit();
+      });
+      expect(result.current.announcement).not.toBe('');
+
+      act(() => {
+        result.current.selectMode('dueto', 'infinito');
+      });
+
       expect(result.current.announcement).toBe('');
     });
 
@@ -296,7 +355,7 @@ describe('useMatch', () => {
       );
     });
 
-    it('appends the loss line on the final, still-wrong attempt', () => {
+    it('appends the loss line, and the answer, on the final, still-wrong attempt', () => {
       const { result } = renderHook(() => useMatch(), { wrapper });
       isValidGuess.mockImplementation((word: string) => word !== 'CASAL');
 
@@ -313,7 +372,35 @@ describe('useMatch', () => {
 
       expect(result.current.state.status).toBe('lost');
       expect(result.current.announcement.startsWith('Linha 6')).toBe(true);
-      expect(result.current.announcement.endsWith('Fim de jogo: você não acertou dessa vez.')).toBe(true);
+      // Task 25 fix round 1 (F2): a lost match now names the word — a
+      // sighted player still sees it in ResultModal's own reveal; without
+      // this a screen-reader user heard only "não foi dessa vez" and never
+      // learned it at all.
+      expect(result.current.announcement.endsWith('Fim de jogo: você não acertou dessa vez. A palavra era casal.')).toBe(
+        true,
+      );
+    });
+
+    it('appends each board\'s dictionary definition once it resolves, after the match finishes', async () => {
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      typeWord(result, 'CASAL'); // the canned answer itself
+      await act(async () => {
+        result.current.submit();
+        // `loadDefinition` (mocked above) resolves as a native microtask,
+        // unaffected by this file's fake timers (those only replace
+        // macrotask timers like setTimeout) — a few ticks drains the
+        // `Promise.all(...).then(...)` chain MatchProvider starts once the
+        // FINISHED effect is processed.
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.announcement).toBe(
+        'Linha 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você venceu! ' +
+          'Definição de casal: par de pessoas que vivem juntas.',
+      );
     });
 
     it('names the board this guess solved in a multi-board match, without repeating the guessed letters per board', () => {
@@ -335,6 +422,25 @@ describe('useMatch', () => {
         'Linha 1, tentativa P R A T O. ' +
           'Tabuleiro 1: ausente, na posição errada, na posição errada, na posição errada, ausente. ' +
           'Tabuleiro 2, resolvido: correta, correta, correta, correta, correta.',
+      );
+
+      // Task 25 fix round 1 (F1, Critical): a SECOND guess must not
+      // fabricate fresh results for board 2, which already froze on guess
+      // 1 — a real bug a review round caught live, since the first version
+      // of this code re-scored the new guess against every board's answer
+      // directly, with no reference to `solvedAt`. Only board 1 (still
+      // playing) appears, and the lead-in names exactly which board that is.
+      act(() => {
+        vi.advanceTimersByTime(100); // clear the reveal gate from guess 1
+      });
+      typeWord(result, 'CASAL'); // any further accepted guess; never board 1's own answer ("terra")
+      act(() => {
+        result.current.submit();
+      });
+
+      expect(result.current.announcement).toBe(
+        'Linha 2, tentativa C A S A L. Tabuleiros em jogo: 1. ' +
+          'Tabuleiro 1: ausente, na posição errada, ausente, ausente, ausente.',
       );
     });
   });

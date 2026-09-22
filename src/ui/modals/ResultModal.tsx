@@ -218,7 +218,14 @@ export function ResultModal() {
         if (event.target === event.currentTarget) setDismissedKey(matchKey);
       }}
     >
-      <div ref={sheetRef} className="folha" role="dialog" aria-modal="true" aria-labelledby="resultado-titulo">
+      <div
+        ref={sheetRef}
+        className="folha"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="resultado-titulo"
+        aria-describedby="resultado-conteudo"
+      >
         <div className="flex items-start justify-between gap-4">
           <p id="resultado-titulo" className="text-lead">
             {headline}
@@ -245,7 +252,19 @@ export function ResultModal() {
         </div>
         {/* The masthead-over-body hairline a printed dictionary page uses — see .folha-regua's own comment in index.css. */}
         <div className="folha-regua" />
-        <div className="space-y-6">
+        {/*
+          Task 25 fix round 1 (F2): `aria-describedby` ties this dialog's
+          accessible description to its actual content — every board's
+          headword and gloss — so a screen reader announces it too if the
+          player Tabs into this dialog, not only via the live-region
+          sentence GuessAnnouncer.tsx already speaks the moment the match
+          finishes (see MatchProvider.tsx's own doc comment on why that
+          arrives as a second, later update once `loadDefinition` resolves).
+          This dialog still never steals focus on mount (see this
+          component's own doc comment above for exactly why not) — an id
+          reference costs nothing extra and cannot reintroduce that bug.
+        */}
+        <div id="resultado-conteudo" className="space-y-6">
           {state.boards.map((board, index) => (
             <VerbeteEntry key={`${String(index)}-${board.answer}`} answer={board.answer} />
           ))}
