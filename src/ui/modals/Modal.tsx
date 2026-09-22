@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import { blurOnMouseActivation } from '../blurOnMouseActivation';
+import { useFocusTrap } from './useFocusTrap';
 
 export interface ModalProps {
   readonly titleId: string;
@@ -19,6 +20,13 @@ export interface ModalProps {
  * doc comment before changing any of this — the conventions below are
  * copied from it on purpose, not reinvented:
  *
+ * - Tab/Shift+Tab is trapped inside the sheet (`useFocusTrap.ts`, Task 25) —
+ *   without it, Tab from a keyboard-opened trigger would walk into whatever
+ *   DOM order happens to put next (the header's other buttons, in this
+ *   app's case), never into the dialog it just opened, since opening never
+ *   moves focus (see the next bullet). The trap only acts on Tab itself, so
+ *   it cannot reintroduce the mount-time focus steal the next bullet exists
+ *   to avoid.
  * - Escape closes, exactly like ResultModal's own `keydown` listener.
  * - A click that lands on the backdrop itself (not bubbled up from the
  *   sheet) closes too, via the `event.target === event.currentTarget` check.
@@ -82,6 +90,8 @@ export interface ModalProps {
  */
 export function Modal({ titleId, title, onClose, children, headerExtra }: ModalProps) {
   const triggerRef = useRef<Element | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(sheetRef, true);
 
   useEffect(() => {
     // Captured once, on mount, before anything inside this dialog can move
@@ -112,7 +122,7 @@ export function Modal({ titleId, title, onClose, children, headerExtra }: ModalP
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="folha" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div ref={sheetRef} className="folha" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="flex items-start justify-between gap-4">
           <p id={titleId} className="text-lead">
             {title}

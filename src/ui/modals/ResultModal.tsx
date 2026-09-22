@@ -5,6 +5,7 @@ import { useDefinition } from '../../state/useDefinition';
 import { useShare } from '../../state/useShare';
 import type { ShareOutcome } from '../../state/useShare';
 import { blurOnMouseActivation } from '../blurOnMouseActivation';
+import { useFocusTrap } from './useFocusTrap';
 
 const STATUS_HEADLINE: Record<'won' | 'lost', string> = {
   won: 'Você acertou!',
@@ -148,6 +149,12 @@ function VerbeteEntry({ answer }: VerbeteEntryProps) {
  * `usePhysicalKeyboard.ts`'s `isButtonOwnedActivationKey` already exist to
  * prevent for the virtual keyboard; this modal avoids it by simply never
  * stealing focus from whatever the player's last keypress landed on.
+ *
+ * Task 25: Tab/Shift+Tab is trapped inside `.folha` via the same
+ * `useFocusTrap` Modal.tsx uses, gated on `visible` since this component
+ * (unlike Modal.tsx's children) never unmounts — see that hook's own doc
+ * comment for why trapping Tab, specifically, cannot reintroduce the
+ * mount-time steal this comment spends most of itself warning against.
  */
 export function ResultModal() {
   const { state, active } = useMatch();
@@ -158,6 +165,14 @@ export function ResultModal() {
 
   const matchKey = `${active.variant}:${active.mode}:${String(state.finishedAt)}`;
   const visible = state.status !== 'playing' && dismissedKey !== matchKey;
+  const sheetRef = useRef<HTMLDivElement>(null);
+  // Task 25: the same Tab-trap Modal.tsx uses (see useFocusTrap's own doc
+  // comment) — gated on `visible`, not a bare `true`, because this
+  // component never unmounts the way Modal.tsx's children do; without the
+  // gate the trap's keydown listener would stay attached (and its
+  // "container is empty" preventDefault would fire on every Tab) even
+  // while this dialog is hidden.
+  useFocusTrap(sheetRef, visible);
 
   useEffect(() => {
     if (!visible) return;
@@ -203,7 +218,7 @@ export function ResultModal() {
         if (event.target === event.currentTarget) setDismissedKey(matchKey);
       }}
     >
-      <div className="folha" role="dialog" aria-modal="true" aria-labelledby="resultado-titulo">
+      <div ref={sheetRef} className="folha" role="dialog" aria-modal="true" aria-labelledby="resultado-titulo">
         <div className="flex items-start justify-between gap-4">
           <p id="resultado-titulo" className="text-lead">
             {headline}

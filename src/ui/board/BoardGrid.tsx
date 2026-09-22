@@ -38,6 +38,29 @@ export interface BoardGridProps {
  *   Tile.tsx and Row.tsx's own grid-cols-5 (fr-based) tracks do the rest:
  *   nothing here hard-codes a tile's pixel size, only the ceiling on how
  *   big the glyph and the gaps around it are allowed to get.
+ *
+ * `items-start` (Task 25, carried from Task 23's review): CSS Grid's default
+ * `align-items: stretch` was silently inflating every solved board's own box
+ * to match its still-playing row-mate's full height — proven by measuring
+ * `getBoundingClientRect()` on a real Quarteto render: a board frozen after
+ * one guess measured the SAME height (301px) as its nine-row neighbour,
+ * purely from an invisible stretch nothing on screen ever painted into.
+ * `items-start` anchors every board to its row track's own top line instead
+ * (a plain, well-supported grid alignment keyword, no subgrid needed) — each
+ * board's box now equals its own content height, so a solved board "shrinks
+ * from the bottom" precisely as far as its scored rows go, while its top
+ * edge stays exactly where stretch already held it. Two boards is why this
+ * lives on the `boardCount === 2` branch too, not just the compact one:
+ * Dueto's own `sm:grid-cols-2` row has the identical two-items-one-row
+ * shape once a screen is wide enough to go side by side, and the same
+ * invisible stretch measured there too. The one place this row's own track
+ * HEIGHT actually shrinks is when EVERY board sharing that row has solved
+ * (measured: a solved pair's row track drops to its own two boards' max
+ * height, and the next row moves up to meet it) — a lone solved board next
+ * to a still-playing one can never shrink the row itself, since the track
+ * still has to fit its unsolved neighbour's nine rows; `items-start` fixes
+ * the box that was lying about its own height, not the row height that
+ * genuinely still needs to be there.
  */
 export function BoardGrid({ state, shakeToken = 0 }: BoardGridProps) {
   const boardCount = state.boards.length;
@@ -47,8 +70,8 @@ export function BoardGrid({ state, shakeToken = 0 }: BoardGridProps) {
     boardCount <= 1
       ? 'flex w-full max-w-sm flex-col items-center'
       : boardCount === 2
-        ? 'grid w-full max-w-sm grid-cols-1 gap-4 sm:max-w-3xl sm:grid-cols-2 sm:gap-6'
-        : 'grade-compacta grid w-full max-w-md grid-cols-2 gap-3';
+        ? 'grid w-full max-w-sm grid-cols-1 items-start gap-4 sm:max-w-3xl sm:grid-cols-2 sm:gap-6'
+        : 'grade-compacta grid w-full max-w-md grid-cols-2 items-start gap-3';
 
   return (
     <div className={containerClass}>

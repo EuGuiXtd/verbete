@@ -16,6 +16,8 @@ export interface UseMatchResult {
   readonly dismissToast: (id: number) => void;
   /** For Board's active-row shake. See MatchContextValue's doc comment. */
   readonly shakeToken: number;
+  /** The pt-BR sentence the live region reads aloud — see MatchContextValue's own doc comment. */
+  readonly announcement: string;
   /** For ModeTabs: which of the six variant x mode matches is on screen. */
   readonly active: { readonly variant: Variant; readonly mode: Mode };
   readonly selectMode: (variant: Variant, mode: Mode) => void;

@@ -254,6 +254,91 @@ describe('useMatch', () => {
     expect(result.current.state.draft).toBe('CASAL');
   });
 
+  describe('announcement (Task 25: the aria-live sentence GuessAnnouncer.tsx reads aloud)', () => {
+    // Self-contained regardless of what an earlier test in this file left
+    // behind: `isValidGuess.mockClear()` in the outer `beforeEach` only
+    // resets call history, never a `.mockImplementation` override — a real
+    // gap this suite already had (an earlier test overrides it to reject
+    // "CASAL" specifically and never restores it), just never exercised
+    // before now because no test after it relied on the default again.
+    beforeEach(() => {
+      isValidGuess.mockImplementation((word: string) => word === 'CASAL' || word === 'TERRA' || word === 'PRATO');
+    });
+
+    it('is empty before any guess is accepted', () => {
+      const { result } = renderHook(() => useMatch(), { wrapper });
+      expect(result.current.announcement).toBe('');
+    });
+
+    it('states every letter\'s own result after an accepted guess (Solo shape)', () => {
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      typeWord(result, 'TERRA'); // vs the canned answer "casal"
+      act(() => {
+        result.current.submit();
+      });
+
+      expect(result.current.announcement).toBe(
+        'Linha 1: T ausente, E ausente, R ausente, R ausente, A na posição errada.',
+      );
+    });
+
+    it('appends the win line when this guess finishes the match', () => {
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      typeWord(result, 'CASAL'); // the canned answer itself
+      act(() => {
+        result.current.submit();
+      });
+
+      expect(result.current.announcement).toBe(
+        'Linha 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você venceu!',
+      );
+    });
+
+    it('appends the loss line on the final, still-wrong attempt', () => {
+      const { result } = renderHook(() => useMatch(), { wrapper });
+      isValidGuess.mockImplementation((word: string) => word !== 'CASAL');
+
+      const wrongGuesses = ['TERRA', 'PRATO', 'FALAR', 'MUNDO', 'LIVRO', 'NUVEM'];
+      for (const guess of wrongGuesses) {
+        typeWord(result, guess);
+        act(() => {
+          result.current.submit();
+        });
+        act(() => {
+          vi.advanceTimersByTime(100);
+        });
+      }
+
+      expect(result.current.state.status).toBe('lost');
+      expect(result.current.announcement.startsWith('Linha 6')).toBe(true);
+      expect(result.current.announcement.endsWith('Fim de jogo: você não acertou dessa vez.')).toBe(true);
+    });
+
+    it('names the board this guess solved in a multi-board match, without repeating the guessed letters per board', () => {
+      const { result } = renderHook(() => useMatch(), { wrapper });
+
+      act(() => {
+        result.current.selectMode('dueto', 'infinito');
+      });
+      // Solo's own mount already consumed the first canned answer ("casal");
+      // dueto draws the next two off the same cycling mock: "terra", "prato".
+      expect(result.current.state.boards.map((b) => b.answer)).toEqual(['terra', 'prato']);
+
+      typeWord(result, 'PRATO'); // solves board index 1 outright; board 0 ("terra") stays open
+      act(() => {
+        result.current.submit();
+      });
+
+      expect(result.current.announcement).toBe(
+        'Linha 1, tentativa P R A T O. ' +
+          'Tabuleiro 1: ausente, na posição errada, na posição errada, na posição errada, ausente. ' +
+          'Tabuleiro 2, resolvido: correta, correta, correta, correta, correta.',
+      );
+    });
+  });
+
   it('passes through the engine identity contract: a rejection returns the same state object, not a copy', () => {
     const { result } = renderHook(() => useMatch(), { wrapper });
     typeWord(result, 'CA');

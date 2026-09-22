@@ -4,6 +4,7 @@ import { useMatch } from './state/useMatch';
 import { usePhysicalKeyboard } from './state/usePhysicalKeyboard';
 import { BoardGrid } from './ui/board/BoardGrid';
 import { blurOnMouseActivation } from './ui/blurOnMouseActivation';
+import { GuessAnnouncer } from './ui/feedback/GuessAnnouncer';
 import { ToastHost } from './ui/feedback/ToastHost';
 import { Header } from './ui/layout/Header';
 import { ModeTabs } from './ui/layout/ModeTabs';
@@ -42,7 +43,7 @@ function DailyRolloverBanner() {
 }
 
 function GameScreen() {
-  const { state, type, backspace, submit, toasts, dismissToast, shakeToken } = useMatch();
+  const { state, type, backspace, submit, toasts, dismissToast, shakeToken, announcement } = useMatch();
   usePhysicalKeyboard({ onLetter: type, onEnter: submit, onBackspace: backspace });
   const states = keyboardStates(state);
 
@@ -56,6 +57,13 @@ function GameScreen() {
       }
       board={
         <>
+          {/*
+            The entire feedback channel for a player using a screen reader —
+            see GuessAnnouncer's own doc comment. Rendered once here, outside
+            ToastHost, since it has nothing to do with rejection toasts and
+            must never be positioned or visible.
+          */}
+          <GuessAnnouncer text={announcement} />
           {/* Positioned against Shell's <main>, not the viewport — see ToastHost.tsx. */}
           <ToastHost toasts={toasts} onDismiss={dismissToast} />
           {/*

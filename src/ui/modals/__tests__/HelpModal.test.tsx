@@ -41,4 +41,27 @@ describe('HelpModal', () => {
     });
     expect(closed).toBe(true);
   });
+
+  // Task 25: proves the trap is actually WIRED into this real dialog, not
+  // just correct in isolation (see useFocusTrap.test.tsx for the hook's own
+  // exhaustive behaviour). A trigger button living outside the dialog, just
+  // like Header.tsx's real "Ajuda" button does relative to this modal.
+  it('traps Tab inside the dialog, away from a trigger button sitting outside it', () => {
+    render(
+      <>
+        <button type="button">Ajuda</button>
+        <HelpModal isOpen onClose={() => {}} onOpenAbout={() => {}} />
+      </>,
+    );
+    screen.getByRole('button', { name: 'Ajuda' }).focus();
+    expect(document.activeElement?.textContent).toBe('Ajuda');
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    });
+
+    // Redirected straight into the dialog's own first focusable control —
+    // not left to fall through to whatever sits next to "Ajuda" in the DOM.
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+  });
 });

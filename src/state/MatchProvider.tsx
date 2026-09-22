@@ -18,6 +18,7 @@ import { DICTIONARY_VERSION, dailyPool, isValidGuess, pickRandomAnswer } from '.
 import { appendHistory, loadProgress, saveProgress } from '../storage/repository';
 import { computeAnswersHash } from '../storage/schema';
 import type { ProgressRecord } from '../storage/schema';
+import { buildAnnouncement } from './announce';
 import { useReveal } from './useReveal';
 import { useDailyRollover } from './useDailyRollover';
 import { useStats } from './useStats';
@@ -54,6 +55,17 @@ export interface MatchContextValue {
    * a change React would ever see.
    */
   readonly shakeToken: number;
+  /**
+   * The pt-BR sentence GuessAnnouncer.tsx reads aloud, describing whatever
+   * the most recently accepted guess revealed — see buildAnnouncement's own
+   * doc comment in src/state/announce.ts for the exact shape and why it
+   * differs between Solo and a multi-board variant. Empty until the first
+   * guess of a session is accepted; stays at its last value afterwards
+   * rather than clearing between guesses, since an aria-live region only
+   * announces on a text CHANGE and every accepted guess produces new text
+   * anyway (a repeated guess is rejected before ever reaching this).
+   */
+  readonly announcement: string;
   readonly dismissToast: (id: number) => void;
   readonly type: (letter: string) => void;
   readonly backspace: () => void;
@@ -486,6 +498,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
   const [slice, dispatchProvider] = useReducer(providerReducer, undefined, initSlice);
   const [toasts, setToasts] = useState<readonly ToastMessage[]>([]);
   const [shakeToken, setShakeToken] = useState(0);
+  const [announcement, setAnnouncement] = useState('');
   const reveal = useReveal();
   const stats = useStats();
 
@@ -552,6 +565,17 @@ export function MatchProvider({ children }: MatchProviderProps) {
   // it, then drains the queue it just processed.
   useEffect(() => {
     if (slice.pendingEffects.length === 0) return;
+    // Announcement bookkeeping for GuessAnnouncer.tsx (Task 25): every
+    // accepted guess starts its own batch — see buildAnnouncement's own doc
+    // comment in src/state/announce.ts for the sentence itself. Reset on
+    // each ACCEPTED rather than accumulated across the whole queue so two
+    // SUBMITs landing in the same flush (not something a normal player can
+    // trigger — submit() gates on reveal.isRevealing — but not something
+    // this loop should silently mix together either) never let an earlier
+    // batch's BOARD_SOLVED/FINISHED bleed into a later one's sentence.
+    let announcedGuessIndex: number | null = null;
+    let solvedBoardIndexes: number[] = [];
+    let finishedStatus: 'won' | 'lost' | null = null;
     for (const effect of slice.pendingEffects) {
       switch (effect.type) {
         case 'REJECTED':
@@ -567,12 +591,15 @@ export function MatchProvider({ children }: MatchProviderProps) {
           reveal.start(matchKey(slice.active));
           // A new row becomes active; that row has never been rejected yet.
           setShakeToken(0);
+          announcedGuessIndex = effect.guessIndex;
+          solvedBoardIndexes = [];
+          finishedStatus = null;
           break;
         case 'BOARD_SOLVED':
-          // Already encoded in `slice.match` (solvedAt). Later tasks (result
-          // modal) hook this; this task has none.
+          if (effect.guessIndex === announcedGuessIndex) solvedBoardIndexes.push(effect.boardIndex);
           break;
         case 'FINISHED': {
+          finishedStatus = effect.status;
           // The one write that must happen exactly once per completed
           // match: stats and history are cumulative logs, not a snapshot of
           // the active match, so the per-guess and debounced progress saves
@@ -603,6 +630,11 @@ export function MatchProvider({ children }: MatchProviderProps) {
           break;
         }
       }
+    }
+    if (announcedGuessIndex !== null) {
+      setAnnouncement(
+        buildAnnouncement({ state: activeMatch, guessIndex: announcedGuessIndex, solvedBoardIndexes, finishedStatus }),
+      );
     }
     dispatchProvider({ type: 'EFFECTS_FLUSHED' });
   }, [slice.pendingEffects, slice.active, activeMatch, reveal, stats]);
@@ -673,6 +705,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
       isRevealing: isRevealingActive,
       toasts,
       shakeToken,
+      announcement,
       dismissToast,
       type,
       backspace,
@@ -689,6 +722,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
       isRevealingActive,
       toasts,
       shakeToken,
+      announcement,
       dismissToast,
       type,
       backspace,

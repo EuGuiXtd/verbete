@@ -38,6 +38,11 @@ describe('BoardGrid', () => {
     expect(container.firstElementChild?.className).not.toMatch(/(?<!sm:)\bgrid-cols-2\b/);
     // Not the compact (Quarteto-only) tile scale.
     expect(container.firstElementChild?.className).not.toContain('grade-compacta');
+    // Task 25: a solved board must anchor to its row's own top line instead
+    // of stretching to match a still-playing side-by-side neighbour — see
+    // BoardGrid.tsx's own doc comment on `items-start` for the measured
+    // stretch this replaces.
+    expect(container.firstElementChild?.className).toContain('items-start');
   });
 
   it('renders all four boards for a Quarteto match as a fixed 2x2 grid, driven by board count alone', () => {
@@ -62,6 +67,9 @@ describe('BoardGrid', () => {
     for (const wrapper of wrappers) {
       expect(wrapper.className).toContain('gap-1');
     }
+    // Task 25: same anchor-to-top fix as Dueto's own row — see that test's
+    // own comment.
+    expect(container.firstElementChild?.className).toContain('items-start');
   });
 
   it('forwards shakeToken to every board so any of them can shake its own active row', () => {

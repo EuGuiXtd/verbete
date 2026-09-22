@@ -84,6 +84,30 @@ describe('Board', () => {
     expect(rowsOf(container)).toHaveLength(6);
   });
 
+  // Task 25: a sighted affordance fix, carried from Task 23's review — see
+  // this task's report for why `opacity-60` alone was judged too subtle at
+  // Quarteto's compact tile size to read as "done" rather than "not started".
+  describe('the "resolvido" caption', () => {
+    it('appears, hidden from the accessibility tree, once a board solves', () => {
+      let state = make();
+      state = type(state, 'CASAL'); // solves it
+      const { container } = render(<Board state={state} boardIndex={0} />);
+
+      const caption = screen.getByText('resolvido');
+      expect(caption.getAttribute('aria-hidden')).toBe('true');
+      // Still a `<p>`, not a `<div>` — rowsOf's `:scope > div > div` selector
+      // (used throughout this file) must never pick it up as a row.
+      expect(caption.tagName).toBe('P');
+      expect(rowsOf(container)).toHaveLength(1); // unaffected by the caption
+    });
+
+    it('never appears on a board that is still playing', () => {
+      const state = make();
+      render(<Board state={state} boardIndex={0} />);
+      expect(screen.queryByText('resolvido')).toBeNull();
+    });
+  });
+
   describe('shakeToken', () => {
     it('does not shake any row when shakeToken is 0 (no rejection yet)', () => {
       const state = type(make(), 'TERRA');

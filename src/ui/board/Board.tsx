@@ -75,6 +75,30 @@ export function Board({ state, boardIndex, shakeToken = 0, compact = false }: Bo
 
   return (
     <div className={wrapperClass} aria-disabled={solved ? true : undefined}>
+      {/*
+       * Task 25: a frozen board used to signal "done" through `opacity-60`
+       * alone. At Quarteto's compact tile size that dimming reads as too
+       * subtle — a board that solved on its very first guess collapses to
+       * one small, faint row, which an unfamiliar player can misread as
+       * "hasn't started yet" (the one visual state this game never actually
+       * has, since even an untouched board shows a full `maxAttempts` of
+       * empty tiles) rather than "finished". Wrong reading in the direction
+       * that matters most: it looks like there's nothing to see, so a
+       * player might never notice they solved it. A word, not a stronger
+       * fade, fixes the ambiguity outright regardless of tile size — see
+       * this task's report for why a caption was chosen over deepening the
+       * opacity. `aria-hidden`: purely a sighted affordance: a screen-reader
+       * user already gets "resolvido" from `aria-disabled` on this same
+       * element and from the live-region announcement (GuessAnnouncer.tsx)
+       * the instant the board actually solved — this text would only repeat
+       * that, silently, on every subsequent guess a screen reader visits
+       * this board.
+       */}
+      {solved && (
+        <p className="text-micro italic uppercase tracking-wide text-ghost" aria-hidden="true">
+          resolvido
+        </p>
+      )}
       {rowCells.map((cells, index) => {
         const isActive = index === activeIndex;
         const shaking = isActive && shakeToken > 0;
