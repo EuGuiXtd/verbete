@@ -80,8 +80,11 @@ falha de propósito, recusando um host que não bate com o fingerprint esperado.
   tags" restrinja para `main` apenas. É o único controle desta lista que editar o arquivo do
   workflow não consegue contornar sozinho — ele é aplicado fora do repositório de código.
 - **Branch protection / ruleset em `main`:** bloquear push direto (só merge de PR permitido) e
-  exigir que os checks `CI / test`, `Deploy / e2e` e `Branch policy / check-source-branch`
-  passem antes do merge. Um workflow não consegue aplicar isso sozinho — um push que pula o PR
+  exigir que os checks `CI / Typecheck, lint, test, build`, `Deploy / Build and e2e test` e
+  `Branch policy / PRs into main must come from dev` passem antes do merge. Os nomes são os
+  `name:` dos jobs, que é como o GitHub reporta cada check — o id do job (`test`, `e2e`,
+  `check-source-branch`) não casa com nada no ruleset e deixaria o PR parado em "Expected —
+  waiting for status to be reported" para sempre. Um workflow não consegue aplicar isso sozinho — um push que pula o PR
   também pula o workflow que reclamaria dele.
   - **"Require branches to be up to date before merging"**: recomendado, mas não é a única
     proteção — `deploy.yml`'s job `deploy` já exige (via `needs: e2e`) que typecheck, lint,
