@@ -1,0 +1,70 @@
+name: CI
+
+# Runs on every push (any branch) and on pull requests, so a feature branch or
+# a PR into dev/main gets fast feedback. This job never touches deployment
+# secrets and only ever needs read access to the repository, so a pull_request
+# from a fork (which GitHub Actions runs with a read-only token and no repo
+# secrets) is safe to build and test here: the worst a hostile PR can do is
+# waste runner minutes, not exfiltrate anything.
+#
+# Deliberately excluded: end-to-end tests (Playwright). See deploy.yml for
+# where those run and why — short version, they are the deploy gate, not a
+# per-push check, because they require a Chromium download that is slow and
+# because they only need to catch something once per merge to main, not once
+# per WIP push.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.5
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      # Cheap and fully local (no network fetch, no browser): it regenerates
+      # the dictionary from the raw sources already checked into the repo and
+      # byte-compares the result against src/data/*.generated.ts. It only
+      # actually catches something when the raw sources, the blocklist, or
+      # the generation logic changed without a `pnpm dict:build` — which is
+      # rare — but because it costs a couple of seconds either way, there is
+      # no reason to special-case it to only those changes. Every push is
+      # cheap here, so every push gets it.
+      - name: Check generated dictionary is up to date
+        run: pnpm dict:check
+
+      - name: Build
+        run: pnpm build

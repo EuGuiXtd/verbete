@@ -1,0 +1,41 @@
+name: Branch policy
+
+# Half of the branch policy: this workflow rejects a PR into main whose head
+# is not this repository's own dev branch. The other half -- blocking direct
+# pushes to main entirely -- is not something a workflow can enforce (a push
+# that skips PRs also skips whatever workflow would object to it); it is a
+# repository ruleset the user configures by hand. See
+# deploy/vps/README.md and this repo's Settings > Rules for that half.
+#
+# No checkout here on purpose: the only inputs this job needs are event
+# metadata (base/head branch, head repo), so a hostile fork PR never gets its
+# code executed by this workflow, and there is nothing here for a fork PR to
+# tamper with.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  check-source-branch:
+    name: PRs into main must come from dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify the head branch and repository
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [ "${HEAD_REPO}" != "${BASE_REPO}" ]; then
+            echo "::error::pull requests into main must come from this repository's own dev branch, not a fork (${HEAD_REPO})"
+            exit 1
+          fi
+          if [ "${HEAD_REF}" != "dev" ]; then
+            echo "::error::pull requests into main must come from dev (got ${HEAD_REF})"
+            exit 1
+          fi
+          echo "ok: PR into main comes from dev"
