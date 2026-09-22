@@ -43,7 +43,8 @@ function DailyRolloverBanner() {
 }
 
 function GameScreen() {
-  const { state, type, backspace, submit, toasts, dismissToast, shakeToken, announcement } = useMatch();
+  const { state, type, backspace, submit, toasts, dismissToast, shakeToken, announcement, definitionAnnouncement } =
+    useMatch();
   usePhysicalKeyboard({ onLetter: type, onEnter: submit, onBackspace: backspace });
   const states = keyboardStates(state);
 
@@ -63,7 +64,7 @@ function GameScreen() {
             ToastHost, since it has nothing to do with rejection toasts and
             must never be positioned or visible.
           */}
-          <GuessAnnouncer text={announcement} />
+          <GuessAnnouncer text={announcement} definitionText={definitionAnnouncement} />
           {/* Positioned against Shell's <main>, not the viewport — see ToastHost.tsx. */}
           <ToastHost toasts={toasts} onDismiss={dismissToast} />
           {/*

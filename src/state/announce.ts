@@ -73,8 +73,9 @@ function formatList(items: readonly string[]): string {
  * A board solved BY this guess is called out by name ("Tabuleiro 2,
  * resolvido") ahead of its own results. A board frozen by an EARLIER guess
  * is dropped from the per-board list entirely and instead named once in a
- * lead-in ("Tabuleiros em jogo: 1 e 3.") — so a board dropping out reads as
- * information (fewer boards are still live) rather than as a silently
+ * lead-in ("Tabuleiros em jogo: 1 e 3.", or "Tabuleiro em jogo: 4." when
+ * only one is left — see `boardWord` below) — so a board dropping out reads
+ * as information (fewer boards are still live) rather than as a silently
  * missing one a listener might assume was simply skipped by accident.
  */
 export function buildAnnouncement({ state, guessIndex, solvedBoardIndexes, finishedStatus }: AnnouncementInput): string {
@@ -130,8 +131,14 @@ function buildMultiBody(
     boardTexts.push(`${label}: ${states}.`);
   });
 
-  const leadIn =
-    activeBoardNumbers.length < state.boards.length ? `Tabuleiros em jogo: ${formatList(activeBoardNumbers)}. ` : '';
+  let leadIn = '';
+  if (activeBoardNumbers.length < state.boards.length) {
+    // Task 25 fix round 2 (R3): singular/plural agreement — one board left
+    // in play reads "Tabuleiro em jogo: 4.", not the plural noun over a
+    // single item ("Tabuleiros em jogo: 4.") the first version always used.
+    const boardWord = activeBoardNumbers.length === 1 ? 'Tabuleiro' : 'Tabuleiros';
+    leadIn = `${boardWord} em jogo: ${formatList(activeBoardNumbers)}. `;
+  }
   return `Linha ${String(rowNumber)}, tentativa ${spelled}. ${leadIn}${boardTexts.join(' ')}`;
 }
 
@@ -160,15 +167,24 @@ function buildFinishedSuffix(status: 'won' | 'lost', state: MatchState): string 
 }
 
 /**
- * The dictionary-definition line, appended once `loadDefinition` resolves
- * for every board (see MatchProvider.tsx's own doc comment on why this
- * arrives as a SECOND, later update to the same live region rather than
- * blocking the first one on an async dynamic import). Mirrors `ResultModal`'s
- * own per-board reveal — every board gets an entry, win or lose, exactly
- * like `VerbeteEntry` there — but only for a board whose word actually has a
- * generated definition (see `loadDefinition`'s own doc comment on why that
- * is not every word), silently omitted otherwise, exactly as `ResultModal`
- * itself omits the whole gloss paragraph for one.
+ * The dictionary-definition line, set once `loadDefinition` resolves for
+ * every board (see MatchProvider.tsx's own doc comment on the async
+ * staleness guard). Read aloud through its OWN, separate live region
+ * (`GuessAnnouncer.tsx`'s second `role="status"`) rather than appended to
+ * the row/outcome announcement — Task 25 fix round 2 (R2): the row/outcome
+ * region is `aria-atomic="true"`, so appending this to it re-read the WHOLE
+ * thing on every finished match — the final row's five per-letter results,
+ * then the outcome line, then the definition — a full extra utterance for
+ * information the player already heard seconds earlier. A dedicated region
+ * means only the new, actually-new text is ever spoken.
+ *
+ * Mirrors `ResultModal`'s own per-board reveal — every board gets an entry,
+ * win or lose, exactly like `VerbeteEntry` there — but only for a board
+ * whose word actually has a generated definition (see `loadDefinition`'s
+ * own doc comment on why that is not every word — a real, pre-existing gap
+ * in the generated dictionary, not something this function can fix),
+ * silently omitted otherwise, exactly as `ResultModal` itself omits the
+ * whole gloss paragraph for one.
  */
 export function buildDefinitionsAnnouncement(
   boards: ReadonlyArray<{ readonly answer: string }>,

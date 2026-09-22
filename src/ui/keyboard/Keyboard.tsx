@@ -79,21 +79,19 @@ export function Keyboard({ states, boardCount, onKey, onEnter, onBackspace }: Ke
         // key ("Q") sat off-screen at every reachable scroll position, not
         // just the initial one — a real, fully unreachable key, not merely
         // an inconvenient one.
-        // `p-1.5` (Task 25 fix round 1, F3): this row is a scroll container
-        // (overflow-x-auto below, plus overflow-y resolving to `auto` on its
-        // own — a real CSS interop rule: setting only one axis to anything
-        // but visible/clip makes the other axis compute to `auto` too), and
-        // a scroll container clips anything painted outside its own padding
-        // box. Measured directly: with no padding here, a key's own box was
-        // exactly as tall as this row, so its `:focus-visible` ring (2px
-        // outline + 2px offset = 4px beyond the key's own edge, every side)
-        // had nowhere to go and was clipped top and bottom on every key,
-        // left AND right on the first and last key of each row — 28 of this
-        // app's ~37 Tab stops, reduced to a bare vertical bar or nothing at
-        // all. `p-1.5` (6px) gives the ring comfortably more than the 4px it
-        // needs on every side, inside this container's own padding box,
-        // where clipping cannot reach it.
-        <div key={rowIndex} className="flex w-full overflow-x-auto overscroll-x-contain p-1.5">
+        // Task 25 fix round 1 (F3) first fixed a clipped `:focus-visible`
+        // ring here with `p-1.5` padding on this scroll container. Fix
+        // round 2 reverted that: padding every row cost 36px of keyboard
+        // height, measured to push Solo's own sixth row — the one the
+        // player types their final guess into — off screen at 360x800 and
+        // 375x812, two of the most common phone sizes in Brazil. The actual
+        // fix now lives in `.tecla`'s own `:focus-visible` rule in
+        // index.css: an INSET ring (`outline-offset: -2px`) needs no room
+        // outside the key's own box at all, so this row needs no padding
+        // to make room for one. See that rule's own doc comment for the
+        // rest (why outline rather than box-shadow, and the segmented-key
+        // double-ring it links to).
+        <div key={rowIndex} className="flex w-full overflow-x-auto overscroll-x-contain">
           {/*
             `shrink-0`: same reason as Shell.tsx's `.grid-anchor` — without
             it, this wrapper's default `flex-shrink: 1` would let the row

@@ -154,6 +154,30 @@ describe('buildAnnouncement', () => {
       expect(text).not.toContain('Tabuleiro 2');
     });
 
+    it('agrees in number when exactly one board is left in play (Task 25 fix round 2, R3)', () => {
+      const state = createMatch({
+        variant: 'quarteto',
+        mode: 'infinito',
+        dayKey: null,
+        answers: ['cobra', 'casal', 'salta', 'fungo'],
+        startedAt: 0,
+      });
+      const afterCobra = submit(state, 'COBRA'); // solves board 0
+      const afterCasal = submit(afterCobra.state, 'CASAL'); // solves board 1
+      const afterSalta = submit(afterCasal.state, 'SALTA'); // solves board 2 — only board 3 ("fungo") left
+      const final = submit(afterSalta.state, 'TERRA'); // harmless; never any board's own answer
+
+      const text = buildAnnouncement({
+        state: final.state,
+        guessIndex: 3,
+        solvedBoardIndexes: final.solved,
+        finishedStatus: final.finished,
+      });
+
+      expect(text).toContain('Tabuleiro em jogo: 4.');
+      expect(text).not.toContain('Tabuleiros em jogo');
+    });
+
     it('never repeats a letter once per board — the noise the brief warns about', () => {
       const state = createMatch({
         variant: 'quarteto',

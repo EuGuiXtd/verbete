@@ -381,12 +381,23 @@ describe('useMatch', () => {
       );
     });
 
-    it('appends each board\'s dictionary definition once it resolves, after the match finishes', async () => {
+    it('sets each board\'s dictionary definition, in its OWN region, once it resolves after the match finishes', async () => {
       const { result } = renderHook(() => useMatch(), { wrapper });
 
       typeWord(result, 'CASAL'); // the canned answer itself
-      await act(async () => {
+      act(() => {
         result.current.submit();
+      });
+      // Task 25 fix round 2 (R2): the definition arrives strictly AFTER the
+      // row/outcome sentence, and — the actual point of this test — the two
+      // never share one string. `announcement` must already be settled here,
+      // before the async `loadDefinition` chain has had any chance to run.
+      expect(result.current.announcement).toBe(
+        'Linha 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você venceu!',
+      );
+      expect(result.current.definitionAnnouncement).toBe('');
+
+      await act(async () => {
         // `loadDefinition` (mocked above) resolves as a native microtask,
         // unaffected by this file's fake timers (those only replace
         // macrotask timers like setTimeout) — a few ticks drains the
@@ -397,9 +408,10 @@ describe('useMatch', () => {
         await Promise.resolve();
       });
 
+      expect(result.current.definitionAnnouncement).toBe('Definição de casal: par de pessoas que vivem juntas.');
+      // Unchanged — the definition never gets folded into it.
       expect(result.current.announcement).toBe(
-        'Linha 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você venceu! ' +
-          'Definição de casal: par de pessoas que vivem juntas.',
+        'Linha 1: C correta, A correta, S correta, A correta, L correta. Fim de jogo: você venceu!',
       );
     });
 
@@ -438,8 +450,11 @@ describe('useMatch', () => {
         result.current.submit();
       });
 
+      // Task 25 fix round 2 (R3): singular agreement — one board left in
+      // play reads "Tabuleiro em jogo: 1.", not the plural noun over a
+      // single item.
       expect(result.current.announcement).toBe(
-        'Linha 2, tentativa C A S A L. Tabuleiros em jogo: 1. ' +
+        'Linha 2, tentativa C A S A L. Tabuleiro em jogo: 1. ' +
           'Tabuleiro 1: ausente, na posição errada, ausente, ausente, ausente.',
       );
     });

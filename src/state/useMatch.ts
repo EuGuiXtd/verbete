@@ -18,6 +18,8 @@ export interface UseMatchResult {
   readonly shakeToken: number;
   /** The pt-BR sentence the live region reads aloud — see MatchContextValue's own doc comment. */
   readonly announcement: string;
+  /** The dictionary-definition sentence, read through its own separate live region — see MatchContextValue's own doc comment. */
+  readonly definitionAnnouncement: string;
   /** For ModeTabs: which of the six variant x mode matches is on screen. */
   readonly active: { readonly variant: Variant; readonly mode: Mode };
   readonly selectMode: (variant: Variant, mode: Mode) => void;

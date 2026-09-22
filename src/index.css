@@ -92,10 +92,22 @@
   }
 
   /*
-   * One focus treatment, and it is ink on paper: a 2px rule held off the
+   * The page-wide focus treatment: ink on paper, a 2px rule held off the
    * element by a 2px gap. Because the ring lands outside the element it is
    * always drawn on the sheet, so it survives on a fully inked black block
    * and on a red one without needing a second colour.
+   *
+   * `.tecla` overrides this below (Task 25 fix round 2) with an INSET ring
+   * instead — see that rule's own doc comment for why: every `.tecla` this
+   * app has can sit inside a horizontally-scrolling row (Keyboard.tsx), and
+   * a ring drawn OUTSIDE the element has nowhere to go once that row's own
+   * box is exactly as tall as the keys inside it — clipped by the row's own
+   * `overflow-x-auto` (which makes `overflow-y` compute to `auto` too, a
+   * real CSS interop rule, not a bug of this app's own making). Padding
+   * that row to make room for an outset ring was tried first (fix round 1)
+   * and reverted: it cost 36px of keyboard height, measured to push Solo's
+   * own sixth row off screen at 360x800 and 375x812. An inset ring needs no
+   * room outside the box at all, so it costs nothing there.
    */
   :focus-visible {
     outline: 2px solid var(--ink);
@@ -201,6 +213,35 @@
     box-shadow: theme('boxShadow.press-flat');
   }
 
+  /*
+   * Task 25 fix round 2: `.tecla`'s own focus ring is INSET, not the
+   * page-wide outset default (`:focus-visible` above) — see that rule's own
+   * doc comment for why. `outline-offset: -2px` draws the same 2px ink rule
+   * just inside the key's own edge instead of outside it, so it needs no
+   * extra room in the scrolling keyboard row that holds most `.tecla`
+   * elements. `outline` specifically, not `box-shadow`: outline is defined
+   * to paint on top of an element's own descendants regardless of stacking
+   * order, which is exactly what a segmented key's coloured bands
+   * (`.tecla-multipla-fundo`, below — absolutely-positioned children) would
+   * otherwise sit on top of and hide an inset `box-shadow` entirely.
+   *
+   * Plain ink only clears 3:1 (this app's own UI-component floor, not the
+   * 4.5:1 text floor) against `--ink-red`, and effectively none at all
+   * against `--ink` itself — both real backgrounds a scored `.tecla` can
+   * have. The override just below switches to `--knockout` for exactly
+   * those two states, the same (background, ink) pairing this file already
+   * proved out for their own letters.
+   */
+  .tecla:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+
+  .tecla-presente:focus-visible,
+  .tecla-certa:focus-visible {
+    outline-color: var(--knockout);
+  }
+
   .tecla-ausente {
     background-color: var(--paper);
     color: var(--ghost);
@@ -230,6 +271,40 @@
   .tecla-multipla {
     position: relative;
     overflow: hidden;
+  }
+
+  /*
+   * Task 25 fix round 2: a segmented key's own outer box is never actually
+   * painted in any of `.tecla-presente`/`.tecla-certa`'s colours — those
+   * classes are never applied to a segmented button, only to the CHILD
+   * bands below — so no single fixed outline colour on `.tecla:focus-visible`
+   * above can be guaranteed to contrast against whichever bands happen to
+   * sit under the ring at a given moment. `::after` here draws two
+   * concentric inset rings at once — ink, then knockout, 2px further in —
+   * via `box-shadow`, which (unlike `outline`) supports more than one
+   * layer, on a dedicated pseudo-element stacked ABOVE the bands
+   * (`z-index: 2`, higher than `.tecla-multipla-letra`'s own `1`), so at
+   * least one of the two always clears 3:1 against any band colour this
+   * app has: ink against a light (`--paper`/unused) band, knockout against
+   * a dark one (`--ink`/`--ink-red`). The native outline is switched off
+   * here specifically so it does not also draw a redundant, single-colour
+   * ring underneath — one that would otherwise `outline`'s own
+   * paint-on-top behaviour, the same property this whole rule relies on.
+   */
+  .tecla-multipla:focus-visible {
+    outline: none;
+  }
+
+  .tecla-multipla:focus-visible::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    border-radius: inherit;
+    box-shadow:
+      inset 0 0 0 2px var(--ink),
+      inset 0 0 0 4px var(--knockout);
   }
 
   .tecla-multipla-fundo {

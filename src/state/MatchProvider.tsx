@@ -72,6 +72,18 @@ export interface MatchContextValue {
    * would never announce it at all.
    */
   readonly announcement: string;
+  /**
+   * The dictionary-definition sentence, read through its OWN live region —
+   * see `buildDefinitionsAnnouncement`'s own doc comment in
+   * src/state/announce.ts for why this is a separate field/region rather
+   * than appended to `announcement` (Task 25 fix round 2, R2: doing so
+   * forced a full re-read of the whole finishing-guess sentence, since
+   * `announcement`'s region is atomic). Empty until it resolves — which
+   * happens strictly after `announcement` itself already carries the
+   * win/loss line, never before — and cleared alongside `announcement` by
+   * `newMatch`/`selectMode`/`applyDailyRollover`.
+   */
+  readonly definitionAnnouncement: string;
   readonly dismissToast: (id: number) => void;
   readonly type: (letter: string) => void;
   readonly backspace: () => void;
@@ -505,6 +517,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
   const [toasts, setToasts] = useState<readonly ToastMessage[]>([]);
   const [shakeToken, setShakeToken] = useState(0);
   const [announcement, setAnnouncement] = useState('');
+  const [definitionAnnouncement, setDefinitionAnnouncement] = useState('');
   const reveal = useReveal();
   const stats = useStats();
 
@@ -643,11 +656,15 @@ export function MatchProvider({ children }: MatchProviderProps) {
       );
     }
     if (finishedStatus !== null) {
-      // The dictionary-definition line: appended as a SECOND, later update
-      // to the SAME live region, once every board's definition has actually
-      // loaded — never blocking the win/loss line above on an async dynamic
-      // import (`loadDefinition`'s own doc comment: the definitions chunk is
-      // ~35KB gzipped, fetched only now, for the first time this session).
+      // The dictionary-definition line: set once every board's definition
+      // has actually loaded — never blocking the win/loss line above on an
+      // async dynamic import (`loadDefinition`'s own doc comment: the
+      // definitions chunk is ~35KB gzipped, fetched only now, for the first
+      // time this session). Task 25 fix round 2 (R2): this goes to its OWN
+      // `setDefinitionAnnouncement`, a separate live region from
+      // `announcement` above — see `buildDefinitionsAnnouncement`'s own doc
+      // comment for why appending it to the same, atomic region forced a
+      // full re-read of the entire finishing-guess sentence.
       // `firedForKey` freezes exactly which match this belongs to; the
       // `.then()` re-reads `latestRef` (not a captured `slice.active`/
       // `activeMatch`, both stale by the time this resolves) and discards
@@ -662,7 +679,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
         if (currentKey !== firedForKey) return;
         const definitionsLine = buildDefinitionsAnnouncement(boards, rawDefinitions);
         if (definitionsLine === '') return;
-        setAnnouncement((current) => `${current} ${definitionsLine}`);
+        setDefinitionAnnouncement(definitionsLine);
       });
     }
     dispatchProvider({ type: 'EFFECTS_FLUSHED' });
@@ -706,6 +723,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
     // CHANGE. Clearing it here, exactly alongside the toasts/shakeToken this
     // callback already resets for the same "starting fresh" reason.
     setAnnouncement('');
+    setDefinitionAnnouncement(''); // same reason, same region pair — see MatchContextValue's own doc comment
   }, []);
 
   const selectMode = useCallback(
@@ -719,6 +737,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
       setToasts([]);
       setShakeToken(0);
       setAnnouncement(''); // see newMatch's own comment on why this cannot be skipped
+      setDefinitionAnnouncement('');
     },
     [flushActiveProgress],
   );
@@ -728,6 +747,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
     setToasts([]);
     setShakeToken(0);
     setAnnouncement(''); // see newMatch's own comment on why this cannot be skipped
+    setDefinitionAnnouncement('');
   }, [slice.active.variant]);
 
   const dailyNumber = activeMatch.dayKey !== null ? computeDailyNumber(activeMatch.dayKey) : null;
@@ -746,6 +766,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
       toasts,
       shakeToken,
       announcement,
+      definitionAnnouncement,
       dismissToast,
       type,
       backspace,
@@ -763,6 +784,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
       toasts,
       shakeToken,
       announcement,
+      definitionAnnouncement,
       dismissToast,
       type,
       backspace,

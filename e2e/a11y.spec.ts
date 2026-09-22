@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { dayKeyOf } from '../src/engine/clock';
 import { dailyAnswers } from '../src/engine/daily';
 import { normalize } from '../src/engine/normalize';
@@ -8,15 +9,72 @@ import { dailyPool } from '../src/data/dictionary';
 // (140ms) — see src/styles/tokens.css — mirrors resume.spec.ts/quarteto.spec.ts.
 const REVEAL_SETTLE_MS = 600;
 
-async function submit(page: import('@playwright/test').Page, word: string): Promise<void> {
+async function submit(page: Page, word: string): Promise<void> {
   await page.keyboard.type(word);
   await page.keyboard.press('Enter');
   await page.waitForTimeout(REVEAL_SETTLE_MS);
 }
 
-/** The one live region GuessAnnouncer.tsx renders — see its own doc comment. */
-function announcer(page: import('@playwright/test').Page) {
-  return page.locator('[role="status"][aria-atomic="true"]');
+/**
+ * GuessAnnouncer.tsx renders two `[role="status"][aria-atomic="true"]`
+ * regions, in this exact order — the row/outcome sentence first, the
+ * dictionary-definition sentence second (Task 25 fix round 2, R2: they used
+ * to be one region, which forced a full re-read of the row/outcome sentence
+ * every time the definition landed). `.first()`/`.nth(1)` rather than a
+ * class or id: both are otherwise identical `sr-only` divs, and order is
+ * the one thing the component actually guarantees.
+ */
+function announcer(page: Page) {
+  return page.locator('[role="status"][aria-atomic="true"]').first();
+}
+
+function definitionAnnouncer(page: Page) {
+  return page.locator('[role="status"][aria-atomic="true"]').nth(1);
+}
+
+// WCAG relative-luminance contrast, shared by the AA-contrast suite and the
+// focus-ring suite (both need to prove a real colour pair clears a real
+// floor from LIVE computed styles, not from reading the CSS source).
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const [rl, gl, bl] = [r, g, b].map((c) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  }) as [number, number, number];
+  return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+}
+
+function contrast(a: [number, number, number], b: [number, number, number]): number {
+  const [l1, l2] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+function parseRgb(value: string): [number, number, number] {
+  const match = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(value);
+  if (!match) throw new Error(`Could not parse colour: ${value}`);
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+/**
+ * Reaches a virtual keyboard key by its exact letter using REAL `Tab`
+ * keypresses from a blank focus state — never `.focus()` (Task 25 fix
+ * round 2: the reviewer found that a scripted `.focus()` call does not
+ * reliably match `:focus-visible` the way a genuine keyboard-driven focus
+ * does, especially following a mouse interaction — Chromium's own
+ * focus-visible heuristic considers the last input MODALITY, and a script
+ * call is neither. A computed-style assertion built on `.focus()` can
+ * therefore pass by reading a bogus, un-ringed style rather than the real
+ * one). Capped well past the real distance (`Header` + `ModeTabs` + "nova
+ * palavra" + the browser's own focusable-scroller stop, see the
+ * reachability test's own comment) so a genuine regression fails loudly
+ * instead of hanging.
+ */
+async function tabToLetterKey(page: Page, letter: string): Promise<void> {
+  for (let i = 0; i < 40; i += 1) {
+    await page.keyboard.press('Tab');
+    const text = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? null);
+    if (text === letter) return;
+  }
+  throw new Error(`Could not reach key "${letter}" via real Tab presses within 40 attempts`);
 }
 
 test.describe('screen-reader announcements (Task 25)', () => {
@@ -26,18 +84,19 @@ test.describe('screen-reader announcements (Task 25)', () => {
     await page.goto('/');
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
-    const region = announcer(page);
-    await expect(region).toBeAttached();
-    expect(await region.textContent()).toBe('');
-    // `sr-only` clips the region to a 1x1px box rather than `display: none`
-    // (a screen reader ignores a `display: none` region entirely) — so
-    // Playwright's own `toBeHidden` (which only checks for zero size or
-    // `display`/`visibility` hiding) would actually report this as
-    // "visible", the wrong tool for what this element deliberately does.
-    // The bounding box itself is the real, technique-specific proof.
-    const box = await region.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.width * box!.height).toBeLessThanOrEqual(1);
+    for (const region of [announcer(page), definitionAnnouncer(page)]) {
+      await expect(region).toBeAttached();
+      expect(await region.textContent()).toBe('');
+      // `sr-only` clips the region to a 1x1px box rather than `display:
+      // none` (a screen reader ignores a `display: none` region entirely)
+      // — so Playwright's own `toBeHidden` (which only checks for zero
+      // size or `display`/`visibility` hiding) would actually report this
+      // as "visible", the wrong tool for what this element deliberately
+      // does. The bounding box itself is the real, technique-specific proof.
+      const box = await region.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width * box!.height).toBeLessThanOrEqual(1);
+    }
   });
 
   test('states every letter\'s own result after a Solo guess, matching the brief\'s own worked example', async ({
@@ -109,19 +168,14 @@ test.describe('screen-reader announcements (Task 25)', () => {
 
     const guesses = ['CASAS', 'HORAS', 'TERRA', 'PRATO', 'FINDO', 'CLARO'];
     let wonEarly = false;
-    let finalText = '';
     for (const word of guesses) {
       await submit(page, word);
       const text = await announcer(page).textContent();
       if (text?.includes('Fim de jogo')) {
         wonEarly = true;
-        finalText = text;
-        // Not end-anchored: a loss also names the word (F2), and by the
-        // time this fires the async dictionary-definition line (also F2)
-        // may already have landed too — both are additional, later
-        // information, not a reason this core outcome sentence should stop
-        // being present.
-        expect(text).toMatch(/Fim de jogo: você (venceu!|não acertou dessa vez\.)/);
+        // A loss also names the real word (F2) — checked against the
+        // ACTUAL generated dictionary here, not a mock.
+        expect(text).toMatch(/Fim de jogo: você (venceu!|não acertou dessa vez\. A palavra era [a-zà-ÿ]+\.)$/);
         break;
       }
     }
@@ -130,16 +184,43 @@ test.describe('screen-reader announcements (Task 25)', () => {
     // identical guess list and reasoning) — so the loop above must have
     // found the outcome sentence before running out of guesses.
     expect(wonEarly).toBe(true);
-
-    // Task 25 fix round 1 (F2): a loss must also name the real word — this
-    // is the one assertion in this suite that exercises F2 against the
-    // ACTUAL generated dictionary (src/data/answers.generated.ts /
-    // definitions.generated.json), not a mock, so a real lowercase word
-    // must appear after "A palavra era".
-    if (finalText.includes('não acertou')) {
-      expect(finalText).toMatch(/A palavra era [a-zà-ÿ]+\./);
-    }
     await expect(page.getByRole('dialog')).toBeVisible();
+  });
+
+  // Task 25 fix round 2 (R2): proves the actual fix, against the real
+  // dictionary (not a mock) — the row/outcome region must NEVER change once
+  // the async definition lands in its own, separate region.
+  test('the definition lands in its own region, without re-announcing the row/outcome sentence', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
+
+    const guesses = ['CASAS', 'HORAS', 'TERRA', 'PRATO', 'FINDO', 'CLARO'];
+    let outcomeText = '';
+    for (const word of guesses) {
+      await submit(page, word);
+      const text = await announcer(page).textContent();
+      if (text?.includes('Fim de jogo')) {
+        outcomeText = text;
+        break;
+      }
+    }
+    expect(outcomeText).not.toBe('');
+
+    // Give the async `loadDefinition` chunk plenty of room to resolve —
+    // this is the first time it is fetched this session.
+    await page.waitForTimeout(2000);
+
+    // The row/outcome region is byte-for-byte the same text it was the
+    // instant the match finished — never touched again.
+    expect(await announcer(page).textContent()).toBe(outcomeText);
+
+    // The definition region got SOMETHING (a real word from the generated
+    // dictionary very likely has one — see this task's report for the
+    // known, pre-existing exceptions) without ever touching the other region.
+    const definitionText = await definitionAnnouncer(page).textContent();
+    if (definitionText !== '') {
+      expect(definitionText).toMatch(/^Definição de [a-zà-ÿ]+: .+\.$/);
+    }
   });
 });
 
@@ -251,45 +332,150 @@ test.describe('focus trap (Task 25)', () => {
   });
 });
 
-test.describe('focus ring clipping (Task 25 fix round 1, F3)', () => {
-  test('a focused key\'s focus ring fits entirely inside its scrollable row, not clipped by it', async ({ page }) => {
+test.describe('focus ring (Task 25 fix round 2, R1)', () => {
+  test('the ring is inset — zero protrusion outside the key\'s own box — at 320px, driven by real Tab presses', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/');
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 
-    // "Q": the first key in its row — the one whose ring the reviewer found
-    // clipped on THREE sides (top, bottom, and left, since the row's own
-    // scrollport starts flush at its left edge — see Keyboard.tsx's own
-    // doc comment). If the fix holds here it holds for every ordinary key,
-    // whose ring only ever risked the top/bottom clipping every key shared.
-    const qKey = page.getByRole('button', { name: 'Q', exact: true });
-    await qKey.focus();
+    // "Q": the first key in its row — the one whose OUTSET ring (fix round
+    // 1) was clipped on three sides at once. Reached by real `Tab` presses,
+    // never `.focus()` — see `tabToLetterKey`'s own doc comment for why
+    // that distinction actually matters for a `:focus-visible` assertion.
+    await tabToLetterKey(page, 'Q');
 
-    const geometry = await page.evaluate(() => {
+    const ring = await page.evaluate(() => {
       const key = document.activeElement as HTMLElement;
-      const row = key.closest('.overflow-x-auto') as HTMLElement | null;
-      if (!row) return null;
-      const keyRect = key.getBoundingClientRect();
-      const rowRect = row.getBoundingClientRect();
       const cs = getComputedStyle(key);
-      const protrusion = parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset);
       return {
-        ringTop: keyRect.top - protrusion,
-        ringBottom: keyRect.bottom + protrusion,
-        ringLeft: keyRect.left - protrusion,
-        rowTop: rowRect.top,
-        rowBottom: rowRect.bottom,
-        rowLeft: rowRect.left,
+        outlineStyle: cs.outlineStyle,
+        outlineWidth: parseFloat(cs.outlineWidth),
+        outlineOffset: parseFloat(cs.outlineOffset),
       };
     });
 
-    expect(geometry).not.toBeNull();
-    const g = geometry!;
-    // The row's own box (padding included) is the clipping boundary for its
-    // `overflow-x-auto` (and computed `overflow-y: auto`) — the ring must
-    // land entirely inside it, not merely up against its edge.
-    expect(g.ringTop).toBeGreaterThanOrEqual(g.rowTop - 0.5);
-    expect(g.ringBottom).toBeLessThanOrEqual(g.rowBottom + 0.5);
-    expect(g.ringLeft).toBeGreaterThanOrEqual(g.rowLeft - 0.5);
+    expect(ring.outlineStyle).toBe('solid');
+    expect(ring.outlineWidth).toBeGreaterThan(0);
+    // Negative (inset): the ring's outer edge sits AT OR INSIDE the key's
+    // own border box, never beyond it — `outlineOffset + outlineWidth`
+    // is the ring's actual outer edge relative to that border, and it must
+    // never be positive, which is the one number that would mean "this
+    // still needs room outside the box" (fix round 1's whole regression).
+    expect(ring.outlineOffset).toBeLessThan(0);
+    expect(ring.outlineOffset + ring.outlineWidth).toBeLessThanOrEqual(0.5);
+  });
+
+  test('the ring is identically inset at desktop width too', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+    await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
+
+    await tabToLetterKey(page, 'Q');
+
+    const ring = await page.evaluate(() => {
+      const key = document.activeElement as HTMLElement;
+      const cs = getComputedStyle(key);
+      return { outlineOffset: parseFloat(cs.outlineOffset), outlineWidth: parseFloat(cs.outlineWidth) };
+    });
+    expect(ring.outlineOffset).toBeLessThan(0);
+    expect(ring.outlineOffset + ring.outlineWidth).toBeLessThanOrEqual(0.5);
+  });
+
+  // The whole reason F3's original fix (row padding) was reverted: it cost
+  // 36px of keyboard height, measured to push Solo's own sixth row — the
+  // one the player types their final guess into — off screen at exactly
+  // these two sizes.
+  for (const viewport of [
+    { width: 360, height: 800 },
+    { width: 375, height: 812 },
+  ]) {
+    test(`all six Solo rows are visible without scrolling at ${String(viewport.width)}x${String(viewport.height)}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
+
+      const rows = page.locator('.grid-cols-5');
+      await expect(rows).toHaveCount(6); // Solo: maxAttempts rows, always rendered
+      const lastRowBox = await rows.last().boundingBox();
+      expect(lastRowBox).not.toBeNull();
+      // Fully above the keyboard's own top edge, not merely present in the
+      // DOM — "reachable by scrolling" (what fix round 1 shipped) is not
+      // the same claim as "visible" (what this test actually checks).
+      const keyboardTop = await page.getByRole('group', { name: 'Teclado' }).boundingBox();
+      expect(keyboardTop).not.toBeNull();
+      expect(lastRowBox!.y + lastRowBox!.height).toBeLessThanOrEqual(keyboardTop!.y + 0.5);
+    });
+  }
+
+  test('AA: the ring\'s colour clears 3:1 against every real .tecla background, computed live', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
+
+    await tabToLetterKey(page, 'Q');
+
+    // Each of `.tecla`'s real states, added directly to the already
+    // `:focus-visible`-matched key — this measures the CSS rule this fix
+    // round actually wrote (`.tecla-presente:focus-visible`,
+    // `.tecla-certa:focus-visible` overriding the ring to `--knockout`),
+    // not a fabricated game outcome; which real guess produces which state
+    // for which key is exactly the kind of thing this test should not have
+    // to depend on the random secret word for.
+    for (const stateClass of [null, 'tecla-ausente', 'tecla-presente', 'tecla-certa']) {
+      const measured = await page.evaluate((cls) => {
+        const key = document.activeElement as HTMLElement;
+        const added = cls !== null && !key.classList.contains(cls);
+        if (cls !== null) key.classList.add(cls);
+        const cs = getComputedStyle(key);
+        const result = {
+          outlineColor: cs.outlineColor,
+          backgroundColor: cs.backgroundColor,
+          outlineStyle: cs.outlineStyle,
+        };
+        if (added && cls !== null) key.classList.remove(cls);
+        return result;
+      }, stateClass);
+
+      expect(measured.outlineStyle).toBe('solid');
+      const ringRgb = parseRgb(measured.outlineColor);
+      const bgRgb = parseRgb(measured.backgroundColor);
+      expect(contrast(ringRgb, bgRgb)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  test('a segmented (Dueto/Quarteto) key gets a double inset ring instead of the single-colour outline', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
+    await page.getByRole('button', { name: 'Dueto' }).click(); // segments every letter key — see Key.tsx
+
+    await tabToLetterKey(page, 'Q');
+
+    const info = await page.evaluate(() => {
+      const key = document.activeElement as HTMLElement;
+      const outline = getComputedStyle(key).outlineStyle;
+      const after = getComputedStyle(key, '::after');
+      return {
+        isSegmented: key.classList.contains('tecla-multipla'),
+        outlineStyle: outline,
+        afterBoxShadow: after.boxShadow,
+        afterZIndex: after.zIndex,
+      };
+    });
+
+    expect(info.isSegmented).toBe(true);
+    // The native outline is switched off for a segmented key — see
+    // index.css's own doc comment on `.tecla-multipla:focus-visible` for
+    // why (it would draw a redundant, single-colour ring UNDER this one).
+    expect(info.outlineStyle).toBe('none');
+    // Two inset shadows (ink then knockout), not one, not zero, not the
+    // key's own ordinary press-out shadow alone.
+    expect(info.afterBoxShadow.split('inset').length - 1).toBeGreaterThanOrEqual(2);
+    expect(info.afterZIndex).toBe('2');
   });
 });
 
@@ -362,25 +548,6 @@ test.describe('reduced motion (Task 25)', () => {
 });
 
 test.describe('AA contrast, computed live (Task 25)', () => {
-  function relativeLuminance([r, g, b]: [number, number, number]): number {
-    const [rl, gl, bl] = [r, g, b].map((c) => {
-      const v = c / 255;
-      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-    }) as [number, number, number];
-    return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
-  }
-
-  function contrast(a: [number, number, number], b: [number, number, number]): number {
-    const [l1, l2] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
-    return (l1 + 0.05) / (l2 + 0.05);
-  }
-
-  function parseRgb(value: string): [number, number, number] {
-    const match = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(value);
-    if (!match) throw new Error(`Could not parse colour: ${value}`);
-    return [Number(match[1]), Number(match[2]), Number(match[3])];
-  }
-
   for (const scheme of ['light', 'dark'] as const) {
     test(`ink on paper and the ghost/absent tile text both clear 4.5:1 in ${scheme} mode`, async ({ browser }) => {
       const context = await browser.newContext({ colorScheme: scheme });
