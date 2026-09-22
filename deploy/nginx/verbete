@@ -1,0 +1,162 @@
+# Verbete (verbete.devduraes.com.br) on the VPS 179.198.97.215 -- the SAME
+# machine as qyro, amgseg, nossario and rpg, all in production. A syntax error
+# here takes all five down: always `sudo nginx -t` BEFORE `systemctl reload
+# nginx`, and reload, never restart.
+#
+# Install: /etc/nginx/sites-available/verbete -> symlink in sites-enabled
+#          (deploy/vps/04-nginx.sh does it, with a rollback on a failed test)
+# Requires: wildcard cert in /etc/letsencrypt/live/devduraes.com.br/ covering
+#           *.devduraes.com.br (deploy/vps/02-certificate.sh), and the files in
+#           /srv/verbete/app (deploy/vps/03-layout.sh).
+#
+# Modelled on the nossario vhost, not on qyro/amgseg/rpg: Verbete is a static
+# Vite build. No PM2 process, no proxy_pass, no database, nothing to restart.
+#
+# No server block on port 80. The qyro vhost already owns `listen 80
+# default_server` with the redirect to https, and a second default_server on
+# the same address breaks `nginx -t`. No `default_server` on 443 either -- that
+# one belongs to amgseg's `return 444`.
+
+# `$http_cf_connecting_ip`, not `$remote_addr`: behind Cloudflare the latter is
+# always the edge. What keeps that header honest is ufw (80/443 open only to
+# Cloudflare's ranges), not this line.
+# `$uri`, not `$request_uri`: same rule as amgseg and rpg -- the log sits 14
+# days on a shared VPS and the query string is where personal data leaks.
+log_format verbete '$time_iso8601 | $host$uri | $status | '
+                   '$http_cf_connecting_ip | "$http_user_agent"';
+
+server {
+  access_log /var/log/nginx/verbete.log verbete;
+
+  # `listen 443 ssl;` + `http2 on;`, NOT `listen 443 ssl http2;`: nginx here is
+  # 1.26.3 and the combined form is deprecated since 1.25.1 -- it still works,
+  # but it adds a [warn] line to every `nginx -t` (nossario already produces
+  # four of them). Same choice as the amgseg and rpg vhosts.
+  listen 443 ssl;
+  http2 on;
+  server_name verbete.devduraes.com.br;
+
+  ssl_certificate     /etc/letsencrypt/live/devduraes.com.br/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/devduraes.com.br/privkey.pem;
+
+  root /srv/verbete/app;
+  index index.html;
+
+  # The deploy key can write into /srv/verbete/app, and rsync's standard option
+  # set carries `-l` (links), so a symlink in the artifact arrives intact.
+  # Measured locally with this exact vhost: WITHOUT this line, a
+  # `segredo.txt -> /etc/passwd` planted in the web root is served verbatim
+  # over HTTPS -- which on this machine means /srv/qyro/shared/.env is one
+  # deploy away from being public. WITH it, nginx refuses the symlinked
+  # component, try_files moves on and the request lands on the SPA fallback:
+  # a 200 with index.html rather than a 403, and no leak either way.
+  # The build contains no symlinks, so the cost is one extra stat per
+  # component. Needs openat()/fstatat() -- fine on this Debian 13 box.
+  disable_symlinks on;
+
+  # Nothing here accepts a request body.
+  client_max_body_size 1k;
+
+  # nginx.conf has `gzip on` but the default `gzip_types` is text/html alone,
+  # so the 300 KB bundle would reach Cloudflare's edge uncompressed on every
+  # cache miss. Scoped to this server block; the neighbours are untouched.
+  gzip_types text/css application/javascript application/manifest+json image/svg+xml;
+  gzip_min_length 1024;
+
+  # CAREFUL: `add_header` does not merge. A location that declares any
+  # `add_header` of its own drops every one inherited from here, so each
+  # location below repeats these four. Adding a header here alone is a silent
+  # no-op for most of the site.
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+  add_header X-Frame-Options DENY always;
+  add_header X-Content-Type-Options nosniff always;
+  add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+  # ---------- never cached ----------
+  # The three files that decide which build a player runs. Nossario learned
+  # this on 29/07 with stale HTML stuck on a phone opened from WhatsApp; with a
+  # service worker it is worse, because a cached sw.js keeps serving an old
+  # build forever -- the browser would never fetch the new one to find out it
+  # changed.
+  location = /index.html {
+    add_header Cache-Control "no-store, must-revalidate" always;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+  }
+
+  location = /sw.js {
+    add_header Cache-Control "no-store, must-revalidate" always;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+  }
+
+  location = /manifest.webmanifest {
+    # /etc/nginx/mime.types on this machine has `application/json json;` and no
+    # `webmanifest` entry at all (checked, not assumed), so without this the
+    # file would be served as application/octet-stream. The empty `types {}`
+    # plus `default_type` is the usual idiom; emptying the map is harmless in a
+    # location that matches exactly one file -- do NOT lift this to the server
+    # block, where `types` REPLACES the whole inherited table.
+    types { }
+    default_type application/manifest+json;
+
+    add_header Cache-Control "no-store, must-revalidate" always;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+  }
+
+  # ---------- cached forever ----------
+  # Vite puts the content hash in the file name (index-DwOnbHmJ.js), so a
+  # changed byte is a changed URL and nothing stale can be served. `expires`
+  # emits `Cache-Control: max-age=31536000`; the `add_header` below is a second
+  # field that the client joins onto it -- the effective value is
+  # `max-age=31536000, public, immutable`.
+  location ^~ /assets/ {
+    expires 1y;
+    add_header Cache-Control "public, immutable" always;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+  }
+
+  # The Workbox runtime chunk is content-hashed exactly like /assets, it just
+  # lands at the root (sw.js pulls it in with importScripts).
+  location ~ ^/workbox-[0-9a-f]+\.js$ {
+    expires 1y;
+    add_header Cache-Control "public, immutable" always;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+  }
+
+  # ---------- cached, but not forever ----------
+  # Fonts, icons and the favicon keep stable names across builds, so `immutable`
+  # would pin a stale one. They sit in the service worker's revisioned precache,
+  # which appends `?__WB_REVISION__=...` and busts the HTTP cache on its own.
+  location ~* ^/(fonts/.+\.(woff2|txt)|favicon\.svg|icon-[a-z0-9-]+\.png)$ {
+    expires 30d;
+    add_header Cache-Control "public" always;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+  }
+
+  # ---------- SPA fallback ----------
+  # No add_header here on purpose, so the four above are inherited. Any unknown
+  # path becomes an internal redirect to /index.html, which re-enters location
+  # matching and lands on `location = /index.html` -- that is where the deep
+  # link picks up its `no-store`. A missing /assets/... still 404s, because
+  # `^~ /assets/` above has no try_files: an asset must never answer with HTML.
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
