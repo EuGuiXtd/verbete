@@ -111,15 +111,34 @@ server {
     add_header Referrer-Policy strict-origin-when-cross-origin always;
   }
 
+  # ---------- dotfiles are never served ----------
+  # The deploy key writes into this root, so a stray `.env`, `.git/` or
+  # `.DS_Store` arriving in the artifact would be served in full, 200. The
+  # build has no dotfiles today; this makes that a property of the server
+  # rather than of the build. It is the FIRST regex location on purpose --
+  # nginx takes the first matching regex, so it wins over the asset and font
+  # rules below. 404 rather than 403: a 403 confirms the file is there.
+  location ~ /\. {
+    # No add_header here on purpose: with none of its own, this location
+    # inherits the four security headers from the server block.
+    return 404;
+  }
+
   # ---------- cached forever ----------
   # Vite puts the content hash in the file name (index-DwOnbHmJ.js), so a
   # changed byte is a changed URL and nothing stale can be served. `expires`
   # emits `Cache-Control: max-age=31536000`; the `add_header` below is a second
   # field that the client joins onto it -- the effective value is
   # `max-age=31536000, public, immutable`.
-  location ^~ /assets/ {
+  # Plain prefix, NOT `^~`: `^~` tells nginx to stop and skip the regex
+  # locations, which would take /assets/.env straight past the dotfile rule.
+  location /assets/ {
     expires 1y;
-    add_header Cache-Control "public, immutable" always;
+    # No `always` on this one: `add_header ... always` fires on error responses
+    # too, while `expires` does not, so a 404 under /assets/ would come back
+    # advertising `Cache-Control: public, immutable` with no max-age beside it.
+    # Harmless in practice, alarming in a `curl -I`, and simply wrong.
+    add_header Cache-Control "public, immutable";
     add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
     add_header X-Frame-Options DENY always;
     add_header X-Content-Type-Options nosniff always;
@@ -130,7 +149,7 @@ server {
   # lands at the root (sw.js pulls it in with importScripts).
   location ~ ^/workbox-[0-9a-f]+\.js$ {
     expires 1y;
-    add_header Cache-Control "public, immutable" always;
+    add_header Cache-Control "public, immutable";
     add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
     add_header X-Frame-Options DENY always;
     add_header X-Content-Type-Options nosniff always;
@@ -143,7 +162,7 @@ server {
   # which appends `?__WB_REVISION__=...` and busts the HTTP cache on its own.
   location ~* ^/(fonts/.+\.(woff2|txt)|favicon\.svg|icon-[a-z0-9-]+\.png)$ {
     expires 30d;
-    add_header Cache-Control "public" always;
+    add_header Cache-Control "public";
     add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
     add_header X-Frame-Options DENY always;
     add_header X-Content-Type-Options nosniff always;

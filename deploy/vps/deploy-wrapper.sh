@@ -48,8 +48,12 @@ readonly CMD=${SSH_ORIGINAL_COMMAND-}
 audit() {
   # Best effort only: an unavailable or failing logger must never turn into a
   # permitted deploy, nor into a refused one.
+  #
+  # %q on the command: it is attacker-controlled, and a raw newline in it would
+  # forge a second syslog line -- an easy way to bury the real refusal under a
+  # fake "OK" while reading the journal.
   if command -v logger >/dev/null 2>&1; then
-    logger -t verbete-deploy -- "$1: ${CMD}" 2>/dev/null || true
+    logger -t verbete-deploy -- "$(printf '%s: %q' "$1" "${CMD}")" 2>/dev/null || true
   fi
 }
 
@@ -62,6 +66,10 @@ refuse() {
 [ -n "${CMD}" ] || refuse "sem comando (esta chave nao abre shell)"
 
 # --- split, with globbing disabled -------------------------------------------
+# IFS is pinned rather than inherited so the splitting below is self-contained.
+# `restrict` in authorized_keys blocks environment=, so a hostile IFS is not
+# reachable today; this costs nothing and stops that from being load-bearing.
+IFS=$' \t\n'
 set -f
 # Word splitting is the point here, so the lack of quotes is deliberate.
 # shellcheck disable=SC2086
@@ -154,6 +162,40 @@ args=( "$@" )
 source_arg=${args[$# - 2]}
 destino=${args[$# - 1]}
 [ "${source_arg}" = "." ] || refuse "formato inesperado (origem nao e '.')"
+
+# ...and it takes EXACTLY two of them. This is the check the destination
+# allowlist depends on, and without it the allowlist confines nothing.
+#
+# `rsync --server` no lado que RECEBE trata o primeiro positional como um
+# diretorio para onde faz chdir(), e so entao resolve o segundo como destino.
+# Um terceiro positional empurra tudo uma casa para a esquerda, e a string que
+# a checagem de destino examinou deixa de ser o lugar onde os arquivos caem:
+#
+#   rsync --server <opts> /home/qyro/.ssh . /srv/verbete/app/
+#
+# passava por todas as checagens acima -- `.` na penultima posicao, destino
+# exato na ultima -- enquanto o rsync fazia chdir para /home/qyro/.ssh e
+# escrevia LA, com --delete apagando o que ja estava. Reproduzido com rsync de
+# verdade, arquivos escritos: o authorized_keys da vitima foi substituido e o
+# /srv/verbete/app/ ficou vazio. Dali ate reconectar sem restricao como `qyro`,
+# que tem sudo NOPASSWD, e um passo.
+#
+# Toda palavra entre `rsync` e o `. <destino>` final tem de ser uma opcao.
+# Conferido no rsync 3.4.1 da VPS e no 3.5.1 local: opcao com valor sempre
+# chega como `--opt=valor` ou grudada (`-B4096`), nunca como palavra separada
+# (--max-size, --exclude, --bwlimit, --compress-level, --timeout,
+# --modify-window, --block-size, --checksum-choice, --iconv, --chmod, --info,
+# --partial, --suffix, --max-delete, --usermap). O openrsync do macOS manda as
+# curtas soltas, e todas comecam com `-`. Se um rsync futuro separar um valor,
+# isto falha fechado -- que e a regra da casa.
+posicionais=0
+for arg in "${args[@]:1}"; do
+  case "${arg}" in
+    -*) ;;
+    *) posicionais=$(( posicionais + 1 )) ;;
+  esac
+done
+[ "${posicionais}" -eq 2 ] || refuse "numero de argumentos posicionais (${posicionais}, esperado 2)"
 
 # --- 5. the destination ------------------------------------------------------
 case "${destino}" in

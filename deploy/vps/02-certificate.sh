@@ -45,8 +45,15 @@ fi
 echo "    ${JA_TEM}"
 
 if [ "${MODO}" = "conferir" ]; then
-  [ "${JA_TEM}" = "sim" ] || exit 1
-  exit 0
+  if [ "${JA_TEM}" = "sim" ]; then
+    echo "    (--conferir: o wildcard ja esta na linhagem; nada a fazer)"
+    exit 0
+  fi
+  # Sair 1 aqui NAO e um erro: e o estado normal antes de provisionar. O codigo
+  # de saida existe para dar para encadear (`... --conferir || ...`).
+  echo "    (--conferir: ainda falta o wildcard -- e o esperado antes do passo 2."
+  echo "     Nada foi alterado. Rode sem --conferir para emitir.)"
+  exit 1
 fi
 
 if [ "${JA_TEM}" = "sim" ] && [ "${MODO}" = "valer" ]; then

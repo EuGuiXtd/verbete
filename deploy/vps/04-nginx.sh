@@ -50,6 +50,13 @@ if ! openssl x509 -in /etc/letsencrypt/live/devduraes.com.br/fullchain.pem -noou
   exit 1
 fi
 
+# A raiz tem de existir ANTES do reload. Sem esta checagem, rodar o 04 antes do
+# 03 so apareceria como 404 depois de o nginx ja ter sido recarregado.
+if [ ! -d /srv/verbete/app ]; then
+  echo "/srv/verbete/app nao existe; rode o 03-layout.sh antes" >&2
+  exit 1
+fi
+
 # Backup so quando o conteudo muda de verdade. Fica em sites-available, que o
 # nginx.conf NAO inclui (o include e `sites-enabled/*`), entao um .bak aqui e
 # inerte.

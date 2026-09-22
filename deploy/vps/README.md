@@ -45,8 +45,9 @@ Estado conferido em 22/09/2026:
 bash deploy/vps/test-deploy-wrapper.sh
 ```
 
-47 casos. **Se algum falhar, pare aqui** — o wrapper é a tranca da chave de
-deploy, e esta VPS já foi perdida uma vez por uma chave irrestrita.
+**Se algum caso falhar, pare aqui** — o wrapper é a tranca da chave de deploy,
+e esta VPS já foi perdida uma vez por uma chave irrestrita. O `03-layout.sh` se
+recusa a instalar o wrapper se esta suíte não passar.
 
 ### 1. DNS
 
@@ -69,7 +70,8 @@ Cloudflare, então nuvem cinza = site inalcançável.
 ### 2. Certificado wildcard
 
 ```bash
-bash deploy/vps/02-certificate.sh --ensaio   # staging, não toca em nada
+bash deploy/vps/02-certificate.sh --conferir  # só olha o estado atual
+bash deploy/vps/02-certificate.sh --ensaio   # staging do Let's Encrypt
 bash deploy/vps/02-certificate.sh            # para valer
 ```
 
@@ -84,6 +86,13 @@ não precisar ser tocado.
   *.devduraes.com.br`.
 - **Atenção:** isto substitui o certificado de um site que já está no ar
   (`devduraes.com.br`, vhost do rpg). Ensaie com `--ensaio` antes.
+- **`--ensaio` não é "não toca em nada".** Ele usa o ambiente de staging do
+  Let's Encrypt e **não** mexe em `/etc/letsencrypt/live`, mas o desafio ainda
+  é DNS-01: o certbot cria um registro TXT `_acme-challenge` de verdade na zona
+  `devduraes.com.br` e o apaga no fim. É autolimpante; se o script for
+  interrompido no meio, confira a zona no painel da Cloudflare.
+- **`--conferir` sai com código 1 enquanto o wildcard não existir.** É o estado
+  normal antes de provisionar, não um erro — serve para encadear em scripts.
 - **Sobre o deploy hook:** `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh`
   já existe e cobre **todos** os certificados da máquina — o certbot roda os
   hooks de deploy uma vez por renovação, seja qual for a linhagem. O script
@@ -157,6 +166,12 @@ que mais importam:
   visitante; com service worker é pior, porque um `sw.js` em cache serve um
   build velho para sempre.
 
+- **Nada de dotfile é servido** (`location ~ /\. { return 404; }`). O `dist/`
+  não tem nenhum hoje, mas a chave de deploy escreve nessa raiz: um `.env` ou
+  um `.git/` que caísse ali seria servido inteiro. A regra de `/assets/` é um
+  prefixo simples e não `^~` justamente para o nginx continuar consultando essa
+  regex — com `^~` um `/assets/.env` passaria por cima dela.
+
 > `add_header` **não** soma: qualquer `location` que declara um `add_header`
 > próprio perde todos os herdados do `server`. Por isso os quatro cabeçalhos de
 > segurança aparecem repetidos em cada `location` do arquivo. Se você adicionar
@@ -229,6 +244,11 @@ passo 3. Essa fricção é intencional.
   rodando.
 - **`certbot renew --dry-run` não executa deploy hooks.** Testar o hook exige
   chamá-lo na mão com `RENEWED_LINEAGE` definido — é o que o passo 2 faz.
+- **Um 404 sob `/assets/` não carrega `Cache-Control`.** `add_header … always`
+  dispara também em resposta de erro, enquanto `expires` não — juntos faziam um
+  404 anunciar `public, immutable` sem `max-age` nenhum ao lado. Por isso o
+  `add_header` das localizações de cache **não** leva `always`; o dos quatro
+  cabeçalhos de segurança leva.
 - **Dois `Cache-Control` nos assets.** `expires 1y` emite
   `Cache-Control: max-age=31536000` e o `add_header` emite
   `public, immutable`; o cliente junta os dois campos (RFC 9111). O efeito é

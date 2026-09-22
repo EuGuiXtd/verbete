@@ -54,7 +54,10 @@ if grep -q ' verbete_deploy$' "$AK" 2>/dev/null; then
     exit 1
   fi
 else
-  cp -a "$AK" "$AK.bak-$(date +%F-%H%M%S)"
+  # O authorized_keys pode nao existir ainda; sem a guarda o `cp` derruba o
+  # script inteiro por causa do set -e.
+  [ -e "$AK" ] && cp -a "$AK" "$AK.bak-$(date +%F-%H%M%S)"
+  install -d -m 700 "$(dirname "$AK")"
   # Garante a quebra de linha antes de anexar: o $( ) come o \n final, entao
   # `tail -c1` so devolve algo se o ultimo byte NAO for uma quebra.
   if [ -s "$AK" ] && [ -n "$(tail -c1 "$AK")" ]; then printf '\n' >> "$AK"; fi
@@ -92,6 +95,13 @@ abuso "ler o .env do qyro"                  "cat /srv/qyro/shared/.env"         
 abuso "rsync de leitura"                    "rsync --server --sender -logDtpre.iLsfxC . /srv/qyro/shared/" || ruim=1
 abuso "rsync para o diretorio do wrapper"   "rsync --server -logDtpre.iLsfxC . /srv/verbete/bin/"          || ruim=1
 abuso "rsync com travessia"                 "rsync --server -logDtpre.iLsfxC . /srv/verbete/app/../bin/"   || ruim=1
+# Posicional a mais: o rsync faz chdir() no primeiro e escreve LA, com o
+# destino permitido intacto. Nenhuma opcao proibida aparece nesta cadeia --
+# so a contagem de posicionais barra.
+abuso "posicional a mais (chdir para o .ssh)" \
+  "rsync --server -logDtpre.iLsfxC --delete /home/qyro/.ssh . /srv/verbete/app/" || ruim=1
+abuso "'.' duplicado (escreve no home do qyro)" \
+  "rsync --server -logDtpre.iLsfxC --delete . . /srv/verbete/app/"               || ruim=1
 
 [ "${ruim}" -eq 0 ] || { echo; echo "UMA TENTATIVA DE ABUSO PASSOU. Nao use esta chave." >&2; exit 1; }
 

@@ -152,9 +152,32 @@ ok  "rsync 3.4.1: -az --delete"               "rsync --server -logDtprze.iLsfxCI
 ok  "rsync 3.4.1: --dry-run"                  "rsync --server -nltprze.iLsfxCIvu --delete . /srv/verbete/app/"
 ok  "rsync 3.4.1: -v --checksum"              "rsync --server -vltprcze.iLsfxCIvu --delete . /srv/verbete/app/"
 
+echo "--- quantidade de posicionais (a classe que faltava) --------------------"
+# O `rsync --server` que RECEBE faz chdir() no primeiro positional e so entao
+# resolve o segundo como destino. Um terceiro empurra tudo uma casa e a string
+# que a checagem de destino olhou deixa de ser onde os arquivos caem. Todos os
+# casos abaixo passavam batido antes: o '.' estava na penultima posicao e o
+# destino permitido na ultima, exatamente como a checagem exigia.
+nao "posicional a mais (chdir para a vitima)" \
+    "rsync --server -logDtpre.iLsfxC /home/qyro/.ssh . /srv/verbete/app/"   "posicionais"
+nao "posicional a mais com --delete"          \
+    "rsync --server -logDtpre.iLsfxC --delete /home/qyro/.ssh . /srv/verbete/app/" "posicionais"
+nao "'.' duplicado (escreve no cwd do wrapper)" \
+    "rsync --server -logDtpre.iLsfxC --delete . . /srv/verbete/app/"        "posicionais"
+nao "dois destinos"                           \
+    "rsync --server -logDtpre.iLsfxC . /srv/qyro/shared/ /srv/verbete/app/" "formato inesperado"
+nao "quatro posicionais"                      \
+    "rsync --server -logDtpre.iLsfxC /a /b . /srv/verbete/app/"             "posicionais"
+nao "'--' nao vira escudo para um posicional" \
+    "rsync --server -logDtpre.iLsfxC -- /home/qyro/.ssh . /srv/verbete/app/" "posicionais"
+nao "so um posicional"                        \
+    "rsync --server -logDtpre.iLsfxC --delete /srv/verbete/app/ /srv/verbete/app/" "origem nao e '.'"
+
 echo "--- formato --------------------------------------------------------------"
 nao "sem o '.' de origem"                   "rsync ${SRV} /etc/passwd /srv/verbete/app/" "formato inesperado"
 nao "origem extra depois do '.'"            "rsync ${SRV} . /etc/passwd /srv/verbete/app/" "formato inesperado"
+nao "opcao depois dos posicionais"          "rsync ${SRV} . /srv/verbete/app/ --delete"   "formato inesperado"
+nao "--server depois dos posicionais"       "rsync -logDtpre.iLsfxC . /srv/verbete/app/ --server" "formato inesperado"
 
 echo "--- metacaracteres nao sao sintaxe --------------------------------------"
 : > "${TMP}/canario"
