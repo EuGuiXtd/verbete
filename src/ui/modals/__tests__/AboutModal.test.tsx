@@ -39,6 +39,19 @@ describe('AboutModal', () => {
     expect(oflLink.getAttribute('href')).toBe('https://scripts.sil.org/OFL');
   });
 
+  it('links the licence texts this app actually ships, not only the upstream pages (I2/I3)', () => {
+    // LGPLv3 section 4 (via GPLv3 section 4) and OFL condition 2 both
+    // require the licence to be conveyed WITH the work. An external link to
+    // gnu.org or sil.org conveys nothing, least of all to the installed
+    // offline copy. These three hrefs are same-origin files in public/,
+    // precached by the service worker — e2e/pwa-offline.spec.ts proves the
+    // precache half; this proves the app points at them at all.
+    render(<AboutModal isOpen onClose={() => {}} />);
+    expect(screen.getByRole('link', { name: 'LGPL-3.0' }).getAttribute('href')).toBe('/licenses/LGPL-3.0.txt');
+    expect(screen.getByRole('link', { name: 'GPL-3.0' }).getAttribute('href')).toBe('/licenses/GPL-3.0.txt');
+    expect(screen.getByRole('link', { name: 'OFL.txt' }).getAttribute('href')).toBe('/fonts/OFL.txt');
+  });
+
   it('does not assert a specific MPL version for VERO, matching NOTICE.md\'s own unresolved-version stance', () => {
     render(<AboutModal isOpen onClose={() => {}} />);
     expect(screen.queryByText(/mpl-1\.1|mpl 1\.1|mozilla public license.*version 1/i)).toBeNull();

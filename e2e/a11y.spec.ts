@@ -228,6 +228,15 @@ test.describe('keyboard reachability (Task 25)', () => {
   test('every header control, mode/variant tab, letter key and action key is reachable by Tab alone, in one pass', async ({
     page,
   }) => {
+    // The app opens on the mode last played and defaults to Diário (C4), but
+    // "Começar uma nova palavra" only exists in Infinito and this pass is
+    // about reaching EVERY control. Seeded rather than clicked: a click would
+    // leave the sequential-focus starting point on the tab it pressed, and
+    // Tab has to start from the top of the document for the order below to
+    // mean anything.
+    await page.addInitScript(([key, envelope]) => {
+      window.localStorage.setItem(key, envelope);
+    }, ['verbete:prefs', JSON.stringify({ v: 1, data: { lastVariant: 'solo', lastMode: 'infinito' } })] as const);
     await page.goto('/');
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
 

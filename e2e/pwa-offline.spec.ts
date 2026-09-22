@@ -49,11 +49,32 @@ async function seedFixedSoloMatch(page: import('@playwright/test').Page): Promis
     startedAt: 1_700_000_000_000,
   };
   await page.addInitScript(
-    ([key, envelope]) => {
-      window.localStorage.setItem(key, envelope);
+    ([progressKey, progressEnvelope, prefsKey, prefsEnvelope]) => {
+      window.localStorage.setItem(progressKey, progressEnvelope);
+      window.localStorage.setItem(prefsKey, prefsEnvelope);
     },
-    ['verbete:progress:solo:infinito', JSON.stringify({ v: CURRENT_VERSION, data: record })] as const,
+    [
+      'verbete:progress:solo:infinito',
+      JSON.stringify({ v: CURRENT_VERSION, data: record }),
+      // C4: the app opens on the variant/mode last played, defaulting to
+      // Solo/Diário. This test is about Solo/Infinito, so it says so —
+      // seeding the progress record alone would land on the daily board.
+      'verbete:prefs',
+      JSON.stringify({ v: CURRENT_VERSION, data: { lastVariant: 'solo', lastMode: 'infinito' } }),
+    ] as const,
   );
+}
+
+/** Every pathname currently held in any Cache Storage cache for this origin. */
+async function cachedPaths(page: import('@playwright/test').Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const paths: string[] = [];
+    for (const key of await caches.keys()) {
+      const cache = await caches.open(key);
+      for (const request of await cache.keys()) paths.push(new URL(request.url).pathname);
+    }
+    return paths;
+  });
 }
 
 test.describe('offline play (real service worker)', () => {
@@ -122,6 +143,20 @@ test.describe('offline play (real service worker)', () => {
     });
     expect(newsreaderFontsPrecached).toBe(true);
 
+    // I2/I3: the licence texts travel with the copy. OFL 1.1 condition 2
+    // requires the licence to accompany every redistributed copy of the
+    // font, and LGPLv3 section 4 (via GPLv3 section 4) requires a copy of
+    // the licence to be conveyed with the word lists. The installed,
+    // offline app IS a copy — and it was the one distribution mode where
+    // these files shipped to the server but never into the precache,
+    // because `globPatterns` matched no `.txt` at all. Asserted here, in
+    // the same place the fonts they cover are asserted, rather than by
+    // reading vite.config.ts back to itself.
+    const paths = await cachedPaths(page);
+    for (const licence of ['/fonts/OFL.txt', '/licenses/LGPL-3.0.txt', '/licenses/GPL-3.0.txt']) {
+      expect(paths, `${licence} must be precached`).toContain(licence);
+    }
+
     // Now actually go offline, and prove the app survives a full reload —
     // not just still-open tabs, which would prove nothing about the
     // precache manifest.
@@ -160,5 +195,16 @@ test.describe('offline play (real service worker)', () => {
     // fail to prove (see this task's report).
     await expect(dialog).toContainText(ANSWER);
     await expect(dialog).toContainText(EXPECTED_GLOSS);
+    // I1: the attribution the reveal is required to carry, present in the
+    // offline copy too.
+    await expect(dialog).toContainText('definição adaptada do Wikcionário');
+
+    // And the licence texts are actually readable offline, not merely
+    // listed in a cache manifest.
+    const offlineLicence = await page.evaluate(async () => {
+      const response = await fetch('/licenses/LGPL-3.0.txt');
+      return response.ok ? (await response.text()).slice(0, 80) : null;
+    });
+    expect(offlineLicence).toContain('GNU LESSER GENERAL PUBLIC LICENSE');
   });
 });

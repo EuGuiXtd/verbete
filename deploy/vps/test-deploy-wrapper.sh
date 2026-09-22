@@ -149,6 +149,13 @@ echo "--- o que os clientes de verdade mandam ---------------------------------"
 ok  "openrsync (macOS): opcoes soltas"        "rsync --server --delete-before -l -p -r -t -z --dirs . /srv/verbete/app/"
 ok  "rsync 3.4.1: -rlptz --delete"            "rsync --server -ltprze.iLsfxCIvu --delete . /srv/verbete/app/"
 ok  "rsync 3.4.1: -az --delete"               "rsync --server -logDtprze.iLsfxCIvu --delete . /srv/verbete/app/"
+# O QUE O CI MANDA DE VERDADE. `.github/workflows/deploy.yml` usa
+# `rsync -az --delete-after`, e ate a revisao final desta branch nenhum caso
+# aqui -- nem o ensaio do passo 5, nem o runbook -- exercitava essa forma:
+# `grep -rn 'delete-after' deploy/` nao dava nenhum resultado. O wrapper
+# aceitava, mas por sorte, nao por prova. Capturado do rsync 3.x real.
+ok  "CI (deploy.yml): -az --delete-after"    "rsync --server -logDtprze.iLsfxCIvu --delete-after . /srv/verbete/app/"
+ok  "CI em ensaio: -az --delete-after -n"    "rsync --server -nlogDtprze.iLsfxCIvu --delete-after . /srv/verbete/app/"
 ok  "rsync 3.4.1: --dry-run"                  "rsync --server -nltprze.iLsfxCIvu --delete . /srv/verbete/app/"
 ok  "rsync 3.4.1: -v --checksum"              "rsync --server -vltprcze.iLsfxCIvu --delete . /srv/verbete/app/"
 

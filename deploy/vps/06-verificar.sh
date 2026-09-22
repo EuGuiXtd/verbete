@@ -12,8 +12,14 @@ set -euo pipefail
 
 SITE=https://verbete.devduraes.com.br
 VIZINHOS="qyrofinance.com.br amgseg.com.br nossario.com.br devduraes.com.br"
-VPS=qyro@179.198.97.215
-KEY=~/.ssh/qyro_vps
+# O endereco da origem NAO mora neste repositorio. O DNS deste host passa pela
+# Cloudflare (nuvem laranja) e o proposito da nuvem laranja e justamente esconder
+# o IP de origem -- ver 01-dns.sh. Defina antes de rodar, fora do git:
+#
+#   export VPS=usuario@ip-da-origem      # ou um Host apelidado em ~/.ssh/config
+#   export VPS_KEY=~/.ssh/sua_chave      # opcional; o padrao esta abaixo
+VPS="${VPS:?defina VPS=usuario@host antes de rodar (veja deploy/vps/README.md)}"
+KEY="${VPS_KEY:-$HOME/.ssh/qyro_vps}"
 
 ok=0; ruim=0
 sim() { printf '  ok      %s\n' "$1"; ok=$((ok + 1)); }

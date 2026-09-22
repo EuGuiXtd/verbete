@@ -1,7 +1,15 @@
-# Verbete (verbete.devduraes.com.br) on the VPS 179.198.97.215 -- the SAME
-# machine as qyro, amgseg, nossario and rpg, all in production. A syntax error
-# here takes all five down: always `sudo nginx -t` BEFORE `systemctl reload
-# nginx`, and reload, never restart.
+# Verbete (verbete.devduraes.com.br) on the production VPS -- the SAME machine
+# as qyro, amgseg, nossario and rpg, all in production. A syntax error here
+# takes all five down: always `sudo nginx -t` BEFORE `systemctl reload nginx`,
+# and reload, never restart.
+#
+# The origin's address is deliberately NOT written here, or anywhere else in
+# this repository: the DNS record for this host is Cloudflare-proxied (see
+# deploy/vps/01-dns.sh) and the entire point of the orange cloud is that the
+# origin IP is not public. Every script under deploy/vps/ takes it from a
+# `VPS=user@host` environment variable instead; keep the value in
+# ~/.ssh/config or an untracked file. GitHub Actions takes it from the
+# `VPS_HOST`/`VPS_USER` secrets, scoped to the `production` environment.
 #
 # Install: /etc/nginx/sites-available/verbete -> symlink in sites-enabled
 #          (deploy/vps/04-nginx.sh does it, with a rollback on a failed test)
@@ -60,7 +68,18 @@ server {
   # nginx.conf has `gzip on` but the default `gzip_types` is text/html alone,
   # so the 300 KB bundle would reach Cloudflare's edge uncompressed on every
   # cache miss. Scoped to this server block; the neighbours are untouched.
-  gzip_types text/css application/javascript application/manifest+json image/svg+xml;
+  #
+  # `text/javascript` FIRST, and it is the one that actually matters: nginx
+  # 1.21.1 changed stock mime.types to map `.js` to text/javascript, and this
+  # box runs 1.26.3 (see the listen comment below). With only
+  # `application/javascript` listed, CSS, SVG and the manifest compressed --
+  # which made the line look correct -- while the 310 KB main bundle, the
+  # exact thing this directive exists for, went out uncompressed.
+  # `deploy/vps/06-verificar.sh` cannot catch it because it checks through
+  # Cloudflare, which re-compresses at the edge; check the origin directly.
+  # `text/plain` covers the licence texts under /licenses/ and /fonts/OFL.txt
+  # (GPL-3.0.txt alone is 35 KB).
+  gzip_types text/javascript application/javascript text/css application/manifest+json image/svg+xml text/plain;
   gzip_min_length 1024;
 
   # CAREFUL: `add_header` does not merge. A location that declares any
@@ -160,7 +179,11 @@ server {
   # Fonts, icons and the favicon keep stable names across builds, so `immutable`
   # would pin a stale one. They sit in the service worker's revisioned precache,
   # which appends `?__WB_REVISION__=...` and busts the HTTP cache on its own.
-  location ~* ^/(fonts/.+\.(woff2|txt)|favicon\.svg|icon-[a-z0-9-]+\.png)$ {
+  # /licenses/*.txt is here for the same reason /fonts/OFL.txt is: a stable
+  # name, in the service worker's revisioned precache, and a licence text the
+  # app is obliged to keep reachable (LGPLv3 s4, OFL condition 2 -- see
+  # NOTICE.md).
+  location ~* ^/(fonts/.+\.(woff2|txt)|licenses/.+\.txt|favicon\.svg|icon-[a-z0-9-]+\.png)$ {
     expires 30d;
     add_header Cache-Control "public";
     add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;

@@ -30,6 +30,14 @@ export interface AboutModalProps {
  *    community" for the word lists, not "VERO" as an author in its own
  *    right — VERO is the dictionary's name, not a credited party. Both are
  *    named below.
+ *
+ * This screen is also the only place in the running app that can discharge
+ * LGPLv3 section 4 and OFL condition 2 — both require the licence text to
+ * be conveyed WITH the work, and a NOTICE.md in a repository is not
+ * conveyed to anyone playing the game. The three links below point at
+ * files that ship in `public/` and are precached by the service worker
+ * (`vite.config.ts`'s `globPatterns`), so they resolve for the installed,
+ * offline copy too — which is the copy where the obligation bites hardest.
  */
 export function AboutModal({ isOpen, onClose }: AboutModalProps) {
   if (!isOpen) return null;
@@ -62,6 +70,17 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
             diferentes distribuidores já fizeram do mesmo dado — e, adicionalmente, sob a{' '}
             <strong>Mozilla Public License</strong>, na medida em que a concessão não versionada do projeto
             original permitir. Nenhuma versão específica da MPL é afirmada aqui.
+          </p>
+          <p className="mt-2">
+            O texto completo das licenças vai junto com o jogo, inclusive na versão instalada e offline:{' '}
+            <a href="/licenses/LGPL-3.0.txt" target="_blank" rel="noreferrer" className="underline decoration-rule underline-offset-2">
+              LGPL-3.0
+            </a>{' '}
+            e{' '}
+            <a href="/licenses/GPL-3.0.txt" target="_blank" rel="noreferrer" className="underline decoration-rule underline-offset-2">
+              GPL-3.0
+            </a>
+            , que a LGPL-3.0 complementa e exige junto.
           </p>
         </article>
 
@@ -130,7 +149,11 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
             . Os arquivos aqui embutidos são derivados do original: reduzidos aos caracteres que este
             jogo realmente usa e com os eixos variáveis de peso e tamanho óptico ajustados ao que a
             interface efetivamente exige, para caber inteiramente no aplicativo instalável e funcionar
-            offline.
+            offline. O texto da licença acompanha os arquivos da fonte, também offline:{' '}
+            <a href="/fonts/OFL.txt" target="_blank" rel="noreferrer" className="underline decoration-rule underline-offset-2">
+              OFL.txt
+            </a>
+            .
           </p>
         </article>
       </div>

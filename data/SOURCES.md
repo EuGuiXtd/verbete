@@ -77,6 +77,16 @@ it, as licensed under **LGPL-3.0**, the grant common to all four readings above,
 additionally under the **Mozilla Public License** to whatever extent upstream's own unversioned
 MPL grant permits. No specific MPL version is asserted.
 
+**Obligation owed, and where it is discharged.** This is the one grant on this page that is
+copyleft and *conveyed*: LGPLv3 section 4, through the GPLv3 section 4 it incorporates, requires
+a copy of the licence to travel with the work. Recording it in this file does not satisfy it —
+nobody playing the game reads this file. `public/licenses/LGPL-3.0.txt` and
+`public/licenses/GPL-3.0.txt` ship as real files, are linked from the in-app "Sobre as palavras e
+definições" screen, and are in the service worker precache, so the installed offline copy carries
+them. This obligation was missing from both this document and the product until the final
+whole-branch review (I2) — the OFL's five conditions were enumerated in detail below while the
+LGPL grant chosen above was never asked the same question.
+
 ### Task 8 measured build results
 
 The plan's spec guessed 8,000–15,000 guesses and 1,500–3,000 answers. Those were hypotheses;

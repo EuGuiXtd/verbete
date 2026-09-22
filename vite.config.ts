@@ -73,10 +73,20 @@ export default defineConfig({
         // on its @font-face rules) specifically so it lands here, in the
         // revisioned precache, rather than needing a cross-origin runtime
         // cache that could only ever warm up AFTER a page had already
-        // fetched it once online — see this task's report for the offline
+        // fetched it once online — see the Task 24 report for the offline
         // gap that the old Google-Fonts runtime-caching route (removed
         // here) actually had.
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,ico,woff2}'],
+        //
+        // `txt` is here for the licences, not for convenience. The installed
+        // PWA is the one distribution mode where a copy of this app is
+        // handed to someone entirely offline, and both OFL 1.1 (condition 2:
+        // the licence must accompany every copy of the font) and LGPLv3 /
+        // GPLv3 (section 4: a copy of the licence must be conveyed with the
+        // work) require the text to travel with the files. Without this
+        // pattern `dist/fonts/OFL.txt` and `dist/licenses/*.txt` ship to the
+        // server but never into the precache, so the offline copy carries
+        // the fonts and the word lists without their licences.
+        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,ico,woff2,txt}'],
       },
       devOptions: { enabled: false },
     }),

@@ -13,8 +13,9 @@
 #
 # PROXIED (nuvem laranja) nao e preferencia estetica: o ufw da VPS so abre
 # 80/443 para as faixas da Cloudflare. Um registro cinza aponta o navegador
-# direto para 179.198.97.215, o firewall derruba o pacote e o site simplesmente
-# nao responde.
+# direto para o IP de origem, o firewall derruba o pacote e o site simplesmente
+# nao responde. (Esse IP nao aparece em lugar nenhum deste repositorio, de
+# proposito -- e exatamente o que a nuvem laranja existe para esconder.)
 set -euo pipefail
 
 ZONA=devduraes.com.br
@@ -110,9 +111,9 @@ esac
 
 echo
 echo ">>> conferindo a resolucao (pode levar ~1 min para propagar)"
-# Proxied: o IP que aparece aqui e o da borda da Cloudflare (104.x / 172.x),
-# NAO 179.198.97.215. Ver o IP da VPS aqui significa nuvem cinza -- volte e
-# corrija, senao o ufw derruba todo acesso ao site.
+# Proxied: o IP que aparece aqui e o da borda da Cloudflare (104.x / 172.x).
+# Ver o IP da propria VPS aqui significa nuvem cinza -- volte e corrija, senao
+# o ufw derruba todo acesso ao site.
 dig +short "${NOME}" 2>/dev/null || nslookup "${NOME}" 2>/dev/null || true
 echo
 echo "Proximo passo: bash deploy/vps/02-certificate.sh"

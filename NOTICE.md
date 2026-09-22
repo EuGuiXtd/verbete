@@ -32,6 +32,21 @@ derived word lists under **LGPL-3.0** — the grant common to all four readings 
 under the **Mozilla Public License**, to whatever extent upstream's unversioned MPL grant
 permits. No specific MPL version is asserted.
 
+**The obligation this grant carries, and how it is discharged.** LGPLv3 section 4 — via GPLv3
+section 4, which it incorporates — requires a copy of the licence to be *conveyed with* the work,
+not merely referenced. A `NOTICE.md` in a repository is not conveyed to anyone playing the game,
+so the full texts ship as files:
+
+- `public/licenses/LGPL-3.0.txt` → served at `/licenses/LGPL-3.0.txt`
+- `public/licenses/GPL-3.0.txt` → served at `/licenses/GPL-3.0.txt` (LGPLv3 is written as a set of
+  additional permissions on top of GPLv3 and is unreadable without it, so both are required)
+
+Both are linked from the in-app "Sobre as palavras e definições" screen
+(`src/ui/modals/AboutModal.tsx`), which is reachable from the header's `?` button, and both are in
+the service worker's precache (`vite.config.ts`'s `globPatterns` includes `txt`) so the installed,
+offline copy carries them too. The same applies to `public/fonts/OFL.txt` — see the OFL block
+below.
+
 ## Wikcionário (Portuguese Wiktionary) — word definitions
 
 Added by Task 21. `src/data/definitions.generated.json` (produced by `pnpm dict:build` from
@@ -98,7 +113,10 @@ with the same `google/fonts` distribution this project downloaded from (kept unm
 The OFL's five numbered conditions, and how this project's use maps to each: (1) the font is not
 sold by itself — it ships bundled with this game's code, not distributed on its own; (2) every
 redistributed copy carries the copyright notice and licence — satisfied by `public/fonts/OFL.txt`
-shipping as its own file alongside the two font files it covers; (3) no Reserved Font Name is
+shipping as its own file alongside the two font files it covers, linked from the in-app "Sobre as
+palavras e definições" screen, and precached by the service worker (`vite.config.ts`'s
+`globPatterns` includes `txt`) so the offline copy is not a copy of the fonts without their
+licence, which is the one distribution mode where this condition most literally fails; (3) no Reserved Font Name is
 used by a modified version without permission — this project does not rename the typeface or
 present the subsetted files as anything other than a derivative of Newsreader; (4) the Copyright
 Holder's name is not used to promote this project — it appears only in this attribution notice;

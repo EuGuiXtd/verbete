@@ -25,7 +25,7 @@ Estado conferido em 22/09/2026:
 |---|---|
 | `sites-enabled` | amgseg · nossario · qyro · rpg |
 | cert `devduraes.com.br` | apex + www, **sem wildcard** |
-| DNS `devduraes.com.br` | A apex → 179.198.97.215 (proxied) · CNAME www (proxied) |
+| DNS `devduraes.com.br` | A apex → IP de origem (**proxied**) · CNAME www (proxied) |
 | PM2 | `qyro-web` ×2, `amgseg-web` ×1 (`rpg-web` não existe) |
 | `/srv` | amgseg · nossario · qyro · rpg |
 | nginx | 1.26.3, Debian 13 |
@@ -33,7 +33,14 @@ Estado conferido em 22/09/2026:
 
 ## Antes de começar
 
-- `~/.ssh/qyro_vps` (chave de login normal na VPS, usuário `qyro`, sudo NOPASSWD)
+- **`VPS=usuario@host`** — exportado no shell antes de rodar qualquer passo. O
+  endereço da origem **não** mora neste repositório: o DNS deste host é
+  proxied pela Cloudflare, e o IP de origem é exatamente o que a nuvem laranja
+  existe para esconder. Guarde o valor num `Host` apelidado em `~/.ssh/config`
+  ou num arquivo fora do git. Todo script de `deploy/vps/` recusa rodar sem ele
+  (`${VPS:?...}`).
+- `VPS_KEY` (opcional) — caminho da chave de login; o padrão é
+  `~/.ssh/qyro_vps` (chave de login normal na VPS, sudo NOPASSWD)
 - `CF_DNS_TOKEN` — o token `devduraes-certbot` do `senhas.md` (Zone Read + DNS Edit)
 - `curl`, `python3`, `rsync`, `ssh-keygen` na máquina local
 
@@ -62,7 +69,7 @@ Cloudflare, então nuvem cinza = site inalcançável.
 - **Espera encontrar:** a zona `devduraes.com.br` visível pelo token.
 - **Deu certo quando:** a saída mostra `CNAME verbete.devduraes.com.br ->
   devduraes.com.br proxied = True`, e o `dig` no fim devolve um IP da
-  Cloudflare (104.x / 172.x). **Se aparecer 179.198.97.215, está cinza** —
+  Cloudflare (104.x / 172.x). **Se aparecer o IP da própria VPS, está cinza** —
   rode de novo.
 - **Conferir sem mudar nada:** `bash deploy/vps/01-dns.sh --conferir`
 - **Desfazer:** apagar o registro no painel da Cloudflare.
@@ -190,7 +197,7 @@ restrict,command="/srv/verbete/bin/deploy-wrapper.sh" ssh-ed25519 AAAA... verbet
 ```
 
 - **Espera encontrar:** o wrapper já em `/srv/verbete/bin/` (passo 3).
-- **Deu certo quando:** as seis tentativas de abuso no fim aparecem todas como
+- **Deu certo quando:** as nove tentativas de abuso no fim aparecem todas como
   `recusado` (shell, comando qualquer, ler o `.env` do qyro, rsync de leitura,
   rsync para o diretório do wrapper, rsync com `..`), e o ensaio legítimo
   (`rsync --dry-run`) passa.
@@ -218,16 +225,20 @@ destino tem de bater **exatamente** com o que o wrapper permite:
 
 ```bash
 pnpm build
-rsync -rlptz --delete -e "ssh -i ~/.ssh/verbete_deploy -o BatchMode=yes" \
-  dist/ qyro@179.198.97.215:/srv/verbete/app/
+rsync -az --delete-after -e "ssh -i ~/.ssh/verbete_deploy -o BatchMode=yes" \
+  dist/ "${VPS:?defina VPS=usuario@host}":/srv/verbete/app/
 ```
 
 Acrescente `--dry-run` para ensaiar. Depois, `bash deploy/vps/06-verificar.sh`.
 
-Funciona tanto com o `/usr/bin/rsync` do macOS (openrsync, que manda as opções
-soltas) quanto com o GNU rsync 3.x de um runner de CI (que manda um bloco
-compactado, `-logDtprze.iLsfxCIvu`). As duas formas foram capturadas dos
-clientes de verdade e estão fixadas como casos em `test-deploy-wrapper.sh`.
+`-az --delete-after` é **exatamente** o que
+`.github/workflows/deploy.yml` manda; o comando aqui é o mesmo para que o
+ensaio manual exercite o caminho real, e não uma variante parecida. Funciona
+tanto com o `/usr/bin/rsync` do macOS (openrsync, que manda as opções soltas)
+quanto com o GNU rsync 3.x de um runner de CI (que manda um bloco compactado,
+`-logDtprze.iLsfxCIvu`). As três formas — `-az --delete-after`, `-az --delete`
+e `-rlptz --delete` — foram capturadas dos clientes de verdade e estão fixadas
+como casos em `test-deploy-wrapper.sh`.
 
 **O wrapper só aceita `/srv/verbete/app/` ou `/srv/verbete/app`.** Qualquer
 outra grafia — uma subpasta, uma barra dupla, um `..` — é recusada de
@@ -239,6 +250,22 @@ passo 3. Essa fricção é intencional.
 ## Pegadinhas conhecidas
 
 - **Nuvem cinza = site fora do ar.** O ufw só abre 80/443 para a Cloudflare.
+- **A porta 22 e o runner do CI.** O ufw abre 80/443 só para as faixas da
+  Cloudflare, mas a **22 fica de fora dessa regra** — e o
+  `.github/workflows/deploy.yml` precisa dela. Duas consequências que o
+  workflow sozinho não resolve:
+  1. **Se um dia a 22 for restringida por IP de origem, o CI para.** As faixas
+     de saída dos runners hospedados pelo GitHub mudam (publicadas na
+     [meta API](https://api.github.com/meta), campo `actions`, e revisadas com
+     frequência), então uma allowlist fixa vira bloqueio intermitente
+     permanente — e as 3 tentativas do workflow, que hoje existem para um
+     flake real de rede, não consertam isso e só mascaram o diagnóstico. Se
+     for preciso fechar a 22, o caminho é um runner self-hosted ou um túnel
+     (Cloudflare Tunnel), não uma lista de IPs.
+  2. **`VPS_HOST` tem de ser o IP bruto da origem, nunca o hostname.** O
+     hostname é proxied: um `ssh` (ou um `ssh-keyscan`) contra ele chega na
+     borda da Cloudflare, que não fala SSH — a conexão falha, ou pior, devolve
+     uma host key que não é a da VPS.
 - **`reload`, nunca `restart`.** Um restart com configuração quebrada deixa os
   cinco sites fora; um reload recusa a configuração nova e mantém a antiga
   rodando.

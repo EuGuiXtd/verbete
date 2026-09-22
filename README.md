@@ -55,9 +55,23 @@ venha a existir no futuro.
 | Secret | Conteúdo |
 |---|---|
 | `VPS_SSH_KEY` | chave privada `verbete_deploy` (gerada por `deploy/vps/05-deploy-key.sh`) |
-| `VPS_HOST` | IP ou hostname da VPS |
-| `VPS_USER` | usuário SSH na VPS (`qyro`) |
+| `VPS_HOST` | **IP bruto** da origem — nunca o hostname (ver abaixo) |
+| `VPS_USER` | usuário SSH na VPS |
 | `VPS_HOST_KEY_FINGERPRINT` | fingerprint SHA256 da chave de host da VPS — ver abaixo |
+
+**Por que `VPS_HOST` tem de ser o IP, e não o hostname:** o DNS deste host é proxied pela
+Cloudflare (nuvem laranja — ver `deploy/vps/01-dns.sh`). Um `ssh` ou `ssh-keyscan` contra o
+hostname chega na borda da Cloudflare, que não fala SSH: a conexão falha, ou responde com uma
+chave de host que não é a da VPS e o passo de fingerprint abaixo recusa o deploy. Esse mesmo
+proxy é o motivo de o IP não estar escrito em lugar nenhum deste repositório — inclusive nos
+scripts de `deploy/vps/`, que o tomam de `VPS=usuario@host` no ambiente.
+
+**Porta 22 e o runner:** o ufw da VPS abre 80/443 só para as faixas da Cloudflare; a 22 fica
+fora dessa regra e o job de deploy depende dela. Se um dia a 22 for restringida por IP de
+origem, as faixas de saída dos runners hospedados pelo GitHub mudam (meta API, campo `actions`)
+e o deploy vira um bloqueio intermitente permanente que as 3 tentativas do workflow **não**
+consertam — elas existem para um flake de rede real, não para isso. Fechar a 22 exige runner
+self-hosted ou túnel. Ver `deploy/vps/README.md`, seção "Pegadinhas conhecidas".
 
 **Como obter o `VPS_HOST_KEY_FINGERPRINT`:** o workflow de deploy busca a chave de host da VPS
 a cada execução (`ssh-keyscan`), mas só confia nela se bater com este fingerprint — isso evita
@@ -66,7 +80,8 @@ que um runner do GitHub confie cegamente na primeira chave que responder na port
 VPS, por um canal já confiável (a chave `qyro_vps` usada no provisionamento):
 
 ```bash
-ssh -i ~/.ssh/qyro_vps qyro@<host> "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub" | awk '{print $2}'
+ssh -i ~/.ssh/qyro_vps "${VPS:?defina VPS=usuario@host}" \
+  "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub" | awk '{print $2}'
 ```
 
 Guarde a saída (`SHA256:...`) como o secret. Se a VPS trocar de chave de host algum dia
