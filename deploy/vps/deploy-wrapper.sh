@@ -95,6 +95,32 @@ done
 # --- 3. options that escape the destination ----------------------------------
 for arg in "$@"; do
   case "${arg}" in
+    # `--` (end of options) is REFUSED outright, and this case has to come
+    # before `--*` below, which would otherwise swallow it.
+    #
+    # It is refused rather than handled because it makes rsync's idea of a
+    # positional diverge from this script's. The check further down counts a
+    # positional as "a word that does not begin with -"; after a `--`, rsync
+    # counts every remaining word as a path, dash or no dash. That gap was
+    # exploitable:
+    #
+    #   rsync --server <opts> --delete -- -d/../../<vitima> . /srv/verbete/app/
+    #
+    # `-d/../../<vitima>` begins with a dash, so it was never counted here --
+    # exactly two positionals, PASS -- while rsync read three, chdir'd into the
+    # first and wrote there. Reproduced with real files: canary overwritten,
+    # index.html planted, allowed destination left empty, and --delete makes it
+    # destructive. Counting post-`--` words would just move the divergence
+    # somewhere else; refusing the token closes it.
+    #
+    # Nothing real emits `--`: absent from every happy-path capture of GNU
+    # rsync 3.4.1/3.5.1 and of macOS openrsync. A future rsync that started
+    # emitting it would break deploys loudly instead of quietly widening the
+    # allowlist, which is the direction this file fails in.
+    --) refuse "'--' (fim de opcoes) nao e aceito" ;;
+    # A bare `-` is not a valid rsync option either, and no real client sends
+    # one. Same reasoning: a word nobody emits should not be a word we forward.
+    -) refuse "'-' isolado nao e aceito" ;;
     # Would run rsync as a daemon whose config the client supplies, and a
     # daemon config can run commands (pre-xfer exec).
     --daemon|--no-detach|--config|--config=*)

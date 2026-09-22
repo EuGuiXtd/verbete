@@ -168,10 +168,30 @@ nao "dois destinos"                           \
     "rsync --server -logDtpre.iLsfxC . /srv/qyro/shared/ /srv/verbete/app/" "formato inesperado"
 nao "quatro posicionais"                      \
     "rsync --server -logDtpre.iLsfxC /a /b . /srv/verbete/app/"             "posicionais"
-nao "'--' nao vira escudo para um posicional" \
-    "rsync --server -logDtpre.iLsfxC -- /home/qyro/.ssh . /srv/verbete/app/" "posicionais"
-nao "so um posicional"                        \
+# O caso antigo daqui usava uma vitima SEM hifen, que a contagem ja pegava
+# sozinha -- ele testava a leitura do wrapper, nao o que o rsync faz. O `--`
+# existe justamente para que a palavra seguinte possa comecar com hifen: ai a
+# contagem daqui (positional = palavra que nao comeca com `-`) diverge da do
+# rsync (depois do `--`, tudo e caminho). Reproduzido com arquivos escritos
+# antes da correcao. Os dois casos ficam.
+nao "'--' com posicional prefixado por hifen (o bypass de verdade)" \
+    "rsync --server -logDtpre.iLsfxC --delete -- -d/../../vitima . /srv/verbete/app/" "'--'"
+nao "'--' escondendo um posicional comum" \
+    "rsync --server -logDtpre.iLsfxC -- /home/qyro/.ssh . /srv/verbete/app/" "'--'"
+nao "'--' sozinho, sem nada depois" \
+    "rsync --server -logDtpre.iLsfxC -- . /srv/verbete/app/"                 "'--'"
+nao "'-' isolado"                             \
+    "rsync --server -logDtpre.iLsfxC - . /srv/verbete/app/"                  "'-' isolado"
+# Este tem DOIS posicionais (o destino repetido): a contagem passa e quem pega
+# e a checagem de forma. O nome antigo dizia "so um posicional" e prometia mais
+# do que entregava.
+nao "dois posicionais, nenhum deles '.'"      \
     "rsync --server -logDtpre.iLsfxC --delete /srv/verbete/app/ /srv/verbete/app/" "origem nao e '.'"
+# Menos de dois posicionais nunca chega na contagem: a checagem de forma exige
+# `.` na penultima posicao e o destino na ultima, o que ja e dois. Na pratica a
+# contagem so e alcancavel para TRES ou mais -- que e exatamente o ataque.
+nao "um posicional so"                        \
+    "rsync --server -logDtpre.iLsfxC --delete /srv/verbete/app/"             "origem nao e '.'"
 
 echo "--- formato --------------------------------------------------------------"
 nao "sem o '.' de origem"                   "rsync ${SRV} /etc/passwd /srv/verbete/app/" "formato inesperado"
@@ -193,6 +213,8 @@ nao "'&&' nao vira operador"                "rsync ${SRV} . /srv/verbete/app/ &&
 nao 'substituicao $(...) nao e avaliada'    'rsync --server -logDtpre.iLsfxC . $(whoami)'             "destino fora da lista"
 # shellcheck disable=SC2016
 nao 'crase nao e avaliada'                  'rsync --server -logDtpre.iLsfxC . `whoami`'              "destino fora da lista"
+# shellcheck disable=SC2016
+nao "';' dentro da propria palavra do destino" "rsync ${SRV} . '/srv/verbete/app/;id'" "destino fora da lista"
 # shellcheck disable=SC2016
 nao 'variavel $HOME nao e expandida'        'rsync --server -logDtpre.iLsfxC . $HOME/'                "destino fora da lista"
 nao "nova linha nao vira segundo comando"   "rsync ${SRV} . /srv/verbete/app/

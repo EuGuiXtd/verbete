@@ -173,8 +173,9 @@ server {
   # No add_header here on purpose, so the four above are inherited. Any unknown
   # path becomes an internal redirect to /index.html, which re-enters location
   # matching and lands on `location = /index.html` -- that is where the deep
-  # link picks up its `no-store`. A missing /assets/... still 404s, because
-  # `^~ /assets/` above has no try_files: an asset must never answer with HTML.
+  # link picks up its `no-store`. A missing /assets/... still 404s, because the
+  # `/assets/` location above has no try_files of its own: an asset must never
+  # answer with HTML.
   location / {
     try_files $uri $uri/ /index.html;
   }

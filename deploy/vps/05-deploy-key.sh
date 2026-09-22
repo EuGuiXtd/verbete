@@ -102,6 +102,11 @@ abuso "posicional a mais (chdir para o .ssh)" \
   "rsync --server -logDtpre.iLsfxC --delete /home/qyro/.ssh . /srv/verbete/app/" || ruim=1
 abuso "'.' duplicado (escreve no home do qyro)" \
   "rsync --server -logDtpre.iLsfxC --delete . . /srv/verbete/app/"               || ruim=1
+# Depois de um `--`, o rsync trata tudo como caminho, inclusive palavra que
+# comeca com hifen -- e uma contagem de posicionais que so olha o hifen nao ve
+# esta aqui. O wrapper recusa o `--` inteiro.
+abuso "'--' escondendo posicional com hifen" \
+  "rsync --server -logDtpre.iLsfxC --delete -- -d/../../home/qyro/.ssh . /srv/verbete/app/" || ruim=1
 
 [ "${ruim}" -eq 0 ] || { echo; echo "UMA TENTATIVA DE ABUSO PASSOU. Nao use esta chave." >&2; exit 1; }
 
