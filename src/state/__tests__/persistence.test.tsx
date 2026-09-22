@@ -228,6 +228,15 @@ describe('MatchProvider persistence', () => {
     // Task 22's HistoryModal reads this straight off the history entry — a
     // regression here would silently make every history row wordless.
     expect(loadHistory()[0]?.answers).toEqual(['casal']);
+    // Task 24: this is the ENTIRE mechanism behind "a stale service
+    // worker's word-list mismatch is detectable rather than silent" — a
+    // finished match with no dictionaryVersion stamp is a version-mismatch
+    // defence that silently stopped existing. Compares against the
+    // MOCKED DICTIONARY_VERSION ('test-fixture', see this file's own
+    // vi.mock above), not a hardcoded literal, so this fails if
+    // MatchProvider.tsx's appendHistory call ever stops reading the real
+    // export.
+    expect(loadHistory()[0]?.dictionaryVersion).toBe('test-fixture');
   });
 
   it('does not un-finish a won match on replay, even if the dictionary would now reject the winning guess', () => {

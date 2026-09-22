@@ -39,12 +39,21 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        // Light mode's --paper (src/styles/tokens.css). The manifest format
-        // has no per-color-scheme variant; index.html's own pre-paint
-        // script already swaps the live <meta name="theme-color"> between
-        // light/dark at runtime (see its doc comment) — this is only the
-        // static fallback an OS reads before that script (or the app
-        // itself) has ever run, e.g. an install prompt's chrome.
+        // Light mode's --paper (src/styles/tokens.css) — deliberately the
+        // ONLY value here, not an oversight. The Web App Manifest spec has
+        // no per-color-scheme `theme_color`/`background_color` (no browser
+        // ships one either; the plugin's own type is a plain `string`), so
+        // there is nothing to branch on at this layer. These two fields
+        // govern install/splash-screen chrome ONLY — the OS-drawn surface
+        // shown before the app's own document (and its pre-paint script)
+        // ever paints a pixel. The actual in-app experience is unaffected:
+        // index.html's inline pre-paint script already swaps the live
+        // <meta name="theme-color"> between light/dark at runtime, reading
+        // the same stored preference the app itself uses (see that
+        // script's own doc comment). Net effect: a dark-mode player's
+        // install/splash screen briefly shows the light paper tone
+        // (#e9e4da) before the app takes over and repaints — there is no
+        // manifest-level mechanism available to change that.
         background_color: '#e9e4da',
         theme_color: '#e9e4da',
         icons: [

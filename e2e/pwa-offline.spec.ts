@@ -95,6 +95,27 @@ test.describe('offline play (real service worker)', () => {
     });
     expect(definitionsChunkCached).toBe(true);
 
+    // Newsreader (index.html's Google Fonts <link>, --font-serif in
+    // tokens.css) cannot live in the revisioned precache — it's a
+    // third-party origin, not part of `dist/` — so it can only be
+    // runtime-cached (vite.config.ts's `runtimeCaching` for
+    // fonts.googleapis.com/fonts.gstatic.com), and only AFTER this page has
+    // actually fetched it once online. Confirm that actually happened
+    // before relying on it offline below, the same "verify, don't assume"
+    // standard as the definitions chunk above.
+    const googleFontsCached = await page.evaluate(async () => {
+      const keys = await caches.keys();
+      for (const key of keys) {
+        const cache = await caches.open(key);
+        const requests = await cache.keys();
+        if (requests.some((req) => /^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(req.url))) {
+          return true;
+        }
+      }
+      return false;
+    });
+    expect(googleFontsCached).toBe(true);
+
     // Now actually go offline, and prove the app survives a full reload —
     // not just still-open tabs, which would prove nothing about the
     // precache manifest.
@@ -103,6 +124,21 @@ test.describe('offline play (real service worker)', () => {
 
     await expect(page.getByRole('group', { name: 'Teclado' })).toBeVisible();
     await expect(page.locator('[role="img"]')).toHaveCount(0); // no guesses yet, fresh board
+
+    // Typography is half this product's identity (see tokens.css's own
+    // doc comment on the letterpress metaphor) — a graceful fallback to a
+    // system serif is still a real degradation, so this checks the actual
+    // FontFace load state, not merely that the CSS declares Newsreader
+    // (getComputedStyle().fontFamily reports the declared stack regardless
+    // of whether the font file itself ever loaded — it can't tell a
+    // successful load from a silent fallback).
+    await page.waitForFunction(() => document.fonts.ready.then(() => true), undefined, { timeout: 10_000 });
+    const newsreaderLoadedOffline = await page.evaluate(() =>
+      Array.from(document.fonts).some(
+        (face) => face.family.replace(/["']/g, '').toLowerCase() === 'newsreader' && face.status === 'loaded',
+      ),
+    );
+    expect(newsreaderLoadedOffline).toBe(true);
 
     // Play the match to completion, entirely offline.
     await page.keyboard.type(WINNING_GUESS);
