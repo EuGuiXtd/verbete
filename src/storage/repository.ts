@@ -16,6 +16,10 @@ const DEFAULT_PREFS: PrefsRecord = {
   reduceMotion: false,
   hardMode: false,
   theme: 'system',
+  // A genuinely first visit opens on the daily, which is what the product
+  // is for — not on an infinite match nobody asked for.
+  lastVariant: 'solo',
+  lastMode: 'diario',
 };
 
 export function loadProgress(variant: Variant, mode: Mode): ProgressRecord | null {

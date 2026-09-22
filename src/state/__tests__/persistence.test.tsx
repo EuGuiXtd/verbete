@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { MatchProvider } from '../MatchProvider';
 import { useMatch } from '../useMatch';
 import { dayKeyOf } from '../../engine/clock';
-import { loadHistory, loadProgress, loadStats, saveProgress } from '../../storage/repository';
+import { loadHistory, loadPrefs, loadProgress, loadStats, savePrefs, saveProgress } from '../../storage/repository';
 import { progressKey } from '../../storage/keys';
 import type { Mode, Variant } from '../../engine/types';
 
@@ -54,6 +54,11 @@ function typeWord(result: { current: ReturnType<typeof useMatch> }, word: string
 beforeEach(() => {
   infiniteAnswerIndex = 0;
   localStorage.clear();
+  // C4: MatchProvider now opens on the variant/mode last used, defaulting to
+  // Solo/Diário on a genuinely first visit. This suite was written against
+  // the old hardcoded Solo/Infinito, so it states that preference explicitly
+  // rather than relying on a default that no longer exists.
+  savePrefs({ ...loadPrefs(), lastVariant: 'solo', lastMode: 'infinito' });
   document.documentElement.style.setProperty('--reveal-duration', '0ms');
   document.documentElement.style.setProperty('--press-duration', '0ms');
 });
@@ -72,6 +77,53 @@ afterEach(() => {
 });
 
 describe('MatchProvider persistence', () => {
+  describe('the active variant and mode survive a reload (C4)', () => {
+    it('comes back on the variant and mode the player last chose, not Solo/Infinito', () => {
+      const first = renderHook(() => useMatch(), { wrapper });
+      act(() => {
+        first.result.current.selectMode('quarteto', 'diario');
+      });
+      expect(first.result.current.active).toEqual({ variant: 'quarteto', mode: 'diario' });
+      cleanup();
+
+      // A reload: same storage, brand new provider.
+      const second = renderHook(() => useMatch(), { wrapper });
+      expect(second.result.current.active).toEqual({ variant: 'quarteto', mode: 'diario' });
+    });
+
+    it('opens a genuinely first visit on the daily, not on a random infinite word', () => {
+      localStorage.clear();
+      const { result } = renderHook(() => useMatch(), { wrapper });
+      expect(result.current.active).toEqual({ variant: 'solo', mode: 'diario' });
+      // And nothing burned an infinite answer on the way in.
+      expect(loadProgress('solo', 'infinito')).toBeNull();
+    });
+
+    it('falls back to the first-visit default when the stored preference is nonsense', () => {
+      savePrefs({
+        ...loadPrefs(),
+        lastVariant: 'quinteto' as unknown as Variant,
+        lastMode: 'semanal' as unknown as Mode,
+      });
+      const { result } = renderHook(() => useMatch(), { wrapper });
+      expect(result.current.active).toEqual({ variant: 'solo', mode: 'diario' });
+    });
+
+    it('keeps the rest of the preferences record intact when it records the mode', () => {
+      savePrefs({ ...loadPrefs(), theme: 'dark', hardMode: true });
+      const { result } = renderHook(() => useMatch(), { wrapper });
+      act(() => {
+        result.current.selectMode('dueto', 'infinito');
+      });
+      expect(loadPrefs()).toMatchObject({
+        theme: 'dark',
+        hardMode: true,
+        lastVariant: 'dueto',
+        lastMode: 'infinito',
+      });
+    });
+  });
+
   it('restores a committed guess across a remount, keeping the original secret answer', () => {
     const first = renderHook(() => useMatch(), { wrapper });
     typeWord(first.result, 'CASAL');

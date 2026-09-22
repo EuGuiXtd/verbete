@@ -214,16 +214,32 @@ describe('buildAnnouncement', () => {
       );
     });
 
-    it('lists every board with a definition, semicolon-separated, for a multi-board match', () => {
+    it('lists every board, semicolon-separated, saying so for the ones with no gloss (C2)', () => {
       const text = buildDefinitionsAnnouncement(
         [{ answer: 'cobra' }, { answer: 'casal' }, { answer: 'fungo' }],
         ['s.f. réptil sem patas', 's.m. par de pessoas', null],
       );
-      expect(text).toBe('Definições — cobra: réptil sem patas; casal: par de pessoas.');
+      expect(text).toBe(
+        'Definições — cobra: réptil sem patas; casal: par de pessoas; fungo: sem definição disponível.',
+      );
     });
 
-    it('returns an empty string when no board has a generated definition, rather than an empty label', () => {
-      expect(buildDefinitionsAnnouncement([{ answer: 'cobra' }], [null])).toBe('');
+    it('tells a Solo listener there is no definition rather than saying nothing at all (C2)', () => {
+      // Pre-C2 this returned '', so MatchProvider suppressed the whole
+      // announcement and the reveal was silent in the one channel that
+      // cannot see the sheet.
+      expect(buildDefinitionsAnnouncement([{ answer: 'cobra' }], [null])).toBe(
+        'Sem definição disponível para cobra.',
+      );
+    });
+
+    it('agrees in number with the entries it reads, not with the board count', () => {
+      // "Definições —" over a single item was the review's minor; the plural
+      // now tracks how many things are actually being read out.
+      expect(buildDefinitionsAnnouncement([{ answer: 'cobra' }], ['s.f. réptil'])).toMatch(/^Definição de /);
+      expect(
+        buildDefinitionsAnnouncement([{ answer: 'cobra' }, { answer: 'casal' }], ['s.f. réptil', null]),
+      ).toMatch(/^Definições — /);
     });
   });
 });

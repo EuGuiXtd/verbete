@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { MatchProvider } from '../MatchProvider';
 import { useMatch } from '../useMatch';
+import { loadPrefs, savePrefs } from '../../storage/repository';
 
 // The dictionary is mocked so tests are deterministic: a real pickRandomAnswer
 // draw and a real 1600-word guess table would make "assert this exact word"
@@ -12,8 +13,16 @@ let answerIndex = 0;
 const DEFAULT_IS_VALID_GUESS = (word: string) => word === 'CASAL' || word === 'TERRA' || word === 'PRATO';
 const isValidGuess = vi.fn(DEFAULT_IS_VALID_GUESS);
 
+// Distinct entries, not just distinct labels: dailyAnswers's real
+// (unmocked) dedup loop never terminates against a pool of fewer than seven
+// distinct words. Only reached when a test switches to Diário — this suite
+// plays infinite mode (see `seedInfinitePreference`) — but MatchProvider can
+// now open on Diário, so the mock has to be complete.
+const DAILY_POOL = Array.from({ length: 20 }, (_, i) => `w${String(i).padStart(4, '0')}`);
+
 vi.mock('../../data/dictionary', () => ({
   isValidGuess: (word: string) => isValidGuess(word),
+  dailyPool: () => DAILY_POOL,
   pickRandomAnswer: () => {
     const answer = answers[answerIndex % answers.length]!;
     answerIndex += 1;
@@ -78,6 +87,11 @@ beforeEach(() => {
   // leftover progress record instead of building the fresh match this
   // suite's mocked pickRandomAnswer sequence expects.
   localStorage.clear();
+  // C4: MatchProvider now opens on the variant/mode last used, defaulting to
+  // Solo/Diário on a genuinely first visit. This suite was written against
+  // the old hardcoded Solo/Infinito, so it states that preference explicitly
+  // rather than relying on a default that no longer exists.
+  savePrefs({ ...loadPrefs(), lastVariant: 'solo', lastMode: 'infinito' });
   vi.useFakeTimers();
   // Deterministic, non-zero gate: real enough to prove the race guard works,
   // short enough that the tests don't need to wait long.

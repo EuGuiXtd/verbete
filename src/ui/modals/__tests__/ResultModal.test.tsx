@@ -4,7 +4,8 @@ import type { ReactNode } from 'react';
 import { MatchProvider } from '../../../state/MatchProvider';
 import { useMatch } from '../../../state/useMatch';
 import { loadDefinition } from '../../../data/definitions';
-import { ResultModal } from '../ResultModal';
+import { DEFINITION_MISSING, ResultModal } from '../ResultModal';
+import { loadPrefs, savePrefs } from '../../../storage/repository';
 
 const DAILY_POOL = Array.from({ length: 20 }, (_, i) => `w${String(i).padStart(4, '0')}`);
 let infiniteAnswerIndex = 0;
@@ -69,6 +70,11 @@ function Harness() {
 beforeEach(() => {
   infiniteAnswerIndex = 0;
   localStorage.clear();
+  // C4: MatchProvider now opens on the variant/mode last used, defaulting to
+  // Solo/Diário on a genuinely first visit. This suite was written against
+  // the old hardcoded Solo/Infinito, so it states that preference explicitly
+  // rather than relying on a default that no longer exists.
+  savePrefs({ ...loadPrefs(), lastVariant: 'solo', lastMode: 'infinito' });
   document.documentElement.style.setProperty('--reveal-duration', '0ms');
   document.documentElement.style.setProperty('--press-duration', '0ms');
   mockedLoadDefinition.mockReset();
@@ -113,18 +119,69 @@ describe('ResultModal', () => {
     expect(screen.getByText('casal')).toBeDefined();
   });
 
-  it('omits the definition paragraph entirely for a word with no generated definition', async () => {
+  it('says so, in Portuguese, when the word has no definition — never an unexplained gap (C2)', async () => {
     mockedLoadDefinition.mockResolvedValue(null);
     render(<Harness />, { wrapper });
     fireEvent.click(screen.getByRole('button', { name: 'win' }));
 
-    const dialog = await screen.findByRole('dialog');
+    await screen.findByRole('dialog');
     expect(screen.getByText('casal')).toBeDefined();
-    // Give the (mocked, already-resolved) lookup a tick to settle, then
-    // confirm no numbered-sense paragraph was ever added — not "added and
-    // then hidden", genuinely never rendered.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(dialog.querySelector('article p')).toBeNull();
+    expect(await screen.findByText(DEFINITION_MISSING)).toBeDefined();
+    // And it is the settled state, not the loading one still showing.
+    expect(screen.queryByText(/carregando/i)).toBeNull();
+  });
+
+  it('says it is loading while the definition chunk is still in flight (C2)', async () => {
+    let resolveDefinition: ((value: string | null) => void) | undefined;
+    mockedLoadDefinition.mockReturnValue(
+      new Promise<string | null>((resolve) => {
+        resolveDefinition = resolve;
+      }),
+    );
+    render(<Harness />, { wrapper });
+    fireEvent.click(screen.getByRole('button', { name: 'win' }));
+
+    await screen.findByRole('dialog');
+    expect(screen.getByText(/carregando a defini/i)).toBeDefined();
+    expect(screen.queryByText(DEFINITION_MISSING)).toBeNull();
+
+    await act(async () => {
+      resolveDefinition?.('s.m. par afetivo');
+      await Promise.resolve();
+    });
+    expect(screen.getByText(/par afetivo/)).toBeDefined();
+    expect(screen.queryByText(/carregando a defini/i)).toBeNull();
+  });
+
+  it('attributes the adapted gloss to Wikcionário under CC BY-SA 4.0, at the point of use (I1)', async () => {
+    render(<Harness />, { wrapper });
+    fireEvent.click(screen.getByRole('button', { name: 'win' }));
+    await screen.findByRole('dialog');
+    await waitFor(() => {
+      expect(screen.getByText(/definição adaptada do Wikcionário/)).toBeDefined();
+    });
+    const deed = screen.getByRole('link', { name: 'CC BY-SA 4.0' });
+    expect(deed.getAttribute('href')).toBe('https://creativecommons.org/licenses/by-sa/4.0/deed.pt-br');
+  });
+
+  it('does not claim an adaptation when there is no adapted text to attribute', async () => {
+    mockedLoadDefinition.mockResolvedValue(null);
+    render(<Harness />, { wrapper });
+    fireEvent.click(screen.getByRole('button', { name: 'win' }));
+    await screen.findByRole('dialog');
+    await screen.findByText(DEFINITION_MISSING);
+    expect(screen.queryByText(/definição adaptada do Wikcionário/)).toBeNull();
+  });
+
+  it('separates the sense number from the gloss with a real space, not only a margin', async () => {
+    render(<Harness />, { wrapper });
+    fireEvent.click(screen.getByRole('button', { name: 'win' }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => {
+      expect(screen.getByText(/par afetivo/)).toBeDefined();
+    });
+    const paragraph = dialog.querySelector('article p');
+    expect(paragraph?.textContent).toBe('1. par afetivo');
   });
 
   it('closes on its own close control without crashing the match underneath', async () => {

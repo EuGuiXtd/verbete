@@ -15,6 +15,18 @@ const STATUS_HEADLINE: Record<'won' | 'lost', string> = {
 /** How long "copiado" stays up after a successful report before reverting to the quiet default label. */
 const COPIED_FEEDBACK_MS = 2000;
 
+/**
+ * The two states the gloss slot can be in other than "here is the
+ * definition". Before these existed the slot simply rendered nothing, so a
+ * word whose definition was still loading and a word that had none looked
+ * identical — and both looked like the app had broken halfway through the
+ * one screen the whole game builds to. `buildDefinitionsAnnouncement` in
+ * src/state/announce.ts says the same two things to a screen reader, in the
+ * same words, so the channels agree.
+ */
+const DEFINITION_LOADING = 'Carregando a definição…';
+export const DEFINITION_MISSING = 'Sem definição disponível para esta palavra.';
+
 /** What the share control's label swaps to for each outcome `useShare` can report. 'failed' shows nothing — see below. */
 const SHARE_FEEDBACK: Record<Exclude<ShareOutcome, 'failed'>, string> = {
   shared: 'compartilhado!',
@@ -40,12 +52,14 @@ interface VerbeteEntryProps {
 
 /**
  * One dictionary entry: headword, part-of-speech abbreviation (when the
- * generated definition carried one), the definition itself (omitted
- * entirely for the ~5% of answers with no usable gloss — see
- * scripts/build-dictionary.ts's buildDefinition), a link to the real
- * Wikcionário entry, and the quiet "palavra errada?" report control (see
- * this task's report for why the answer list ships with an online-report
- * escape hatch instead of a fully general offline filter).
+ * generated definition carried one), the definition itself — or, in its
+ * place, an honest line saying it is still loading or that there is none
+ * (every shipped answer now has one, enforced by `assertBuildInvariants`,
+ * but the chunk is fetched over the network on a dynamic import and can
+ * fail; silence there reads as a broken app, not as an answer) — a link to
+ * the real Wikcionário entry, the CC BY-SA attribution line that link alone
+ * does not carry, and the quiet "palavra errada?" report control
+ * (understated on purpose; see the comment on the button itself).
  *
  * `useDefinition` lives here, not in `ResultModal`, specifically so
  * `ResultModal` can render one `VerbeteEntry` per board via `.map` — a
@@ -55,7 +69,7 @@ interface VerbeteEntryProps {
  * each `VerbeteEntry` instance calls it exactly once.
  */
 function VerbeteEntry({ answer }: VerbeteEntryProps) {
-  const { definition } = useDefinition(answer);
+  const { definition, isLoading } = useDefinition(answer);
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -94,10 +108,20 @@ function VerbeteEntry({ answer }: VerbeteEntryProps) {
           <span className="text-body italic text-ghost">{definition.abbrev}</span>
         )}
       </h3>
-      {definition && (
+      {definition ? (
         <p className="mt-3 max-w-[34rem] text-body">
-          <span className="mr-2 font-semibold">1.</span>
+          {/*
+            The trailing space is a real character, not the `mr-2` margin: an
+            extracted-text reading of this paragraph (a screen reader's, a
+            copy-paste) sees no margins, and "1.forma particular de agir" is
+            not what the sheet says.
+          */}
+          <span className="mr-2 font-semibold">1. </span>
           {definition.gloss}
+        </p>
+      ) : (
+        <p className="mt-3 max-w-[34rem] text-body italic text-ghost">
+          {isLoading ? DEFINITION_LOADING : DEFINITION_MISSING}
         </p>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-micro italic text-ghost">
@@ -116,9 +140,32 @@ function VerbeteEntry({ answer }: VerbeteEntryProps) {
           months; this exists for that moment, not to advertise itself.
         */}
         <button type="button" className="underline decoration-rule underline-offset-2" onClick={handleReport}>
-          {copied ? 'copiado' : 'palavra errada?'}
+          {copied ? 'copiado!' : 'palavra errada?'}
         </button>
       </div>
+      {/*
+        CC BY-SA 4.0 attribution at the point of use. NOTICE.md stakes the
+        compliance claim on the per-word Wikcionário link above being "the
+        most robust way to credit the original authors AND to indicate that
+        the material was adapted" — a bare hyperlink does the first and not
+        the second, and the linked article cannot know that THIS project
+        shortened and partly redacted its text. This line says both, beside
+        the text it is about. Only rendered when there is adapted text to
+        attribute.
+      */}
+      {definition && (
+        <p className="mt-1 text-micro italic text-ghost">
+          definição adaptada do Wikcionário ·{' '}
+          <a
+            href="https://creativecommons.org/licenses/by-sa/4.0/deed.pt-br"
+            target="_blank"
+            rel="noreferrer"
+            className="underline decoration-rule underline-offset-2"
+          >
+            CC BY-SA 4.0
+          </a>
+        </p>
+      )}
     </article>
   );
 }

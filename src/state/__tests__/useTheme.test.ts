@@ -170,7 +170,14 @@ describe('useTheme', () => {
 
   it('leaves the other preferences alone when writing the theme', () => {
     installMatchMedia(false);
-    savePrefs({ colorBlindMode: false, reduceMotion: true, hardMode: true, theme: 'system' });
+    savePrefs({
+      colorBlindMode: false,
+      reduceMotion: true,
+      hardMode: true,
+      theme: 'system',
+      lastVariant: 'dueto',
+      lastMode: 'infinito',
+    });
 
     const { result } = renderHook(() => useTheme());
     act(() => {
@@ -182,6 +189,10 @@ describe('useTheme', () => {
       reduceMotion: true,
       hardMode: true,
       theme: 'dark',
+      // C4 put the last-played variant/mode in this record too; the point of
+      // this test is that writing one field never drops the others.
+      lastVariant: 'dueto',
+      lastMode: 'infinito',
     });
   });
 

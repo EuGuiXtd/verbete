@@ -98,6 +98,16 @@ export interface PrefsRecord {
   readonly reduceMotion: boolean;
   readonly hardMode: boolean;
   readonly theme: ThemeChoice;
+  /**
+   * The variant/mode pair the player last had on screen, so a reload — or a
+   * cold start of the installed PWA, which is every launch — comes back
+   * where they left off instead of on Solo/Infinito. Stored here rather than
+   * as its own slice because it is exactly what this record is for: a small,
+   * non-authoritative UI preference whose loss costs nothing. Unvalidated
+   * like every other field (see loadPrefs); the reader guards the values.
+   */
+  readonly lastVariant: Variant;
+  readonly lastMode: Mode;
 }
 
 /**

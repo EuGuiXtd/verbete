@@ -12,11 +12,11 @@ import { createMatch, reduce } from '../engine/match';
 import type { Action, Effect, InvalidReason, MatchState } from '../engine/match';
 import { dayKeyOf, epochDayOf } from '../engine/clock';
 import { dailyAnswers, dailyNumber as computeDailyNumber } from '../engine/daily';
-import { VARIANTS, VARIANT_ORDER, WORD_LENGTH } from '../engine/constants';
+import { MODES, VARIANTS, VARIANT_ORDER, WORD_LENGTH } from '../engine/constants';
 import type { Mode, Variant } from '../engine/types';
 import { DICTIONARY_VERSION, dailyPool, isValidGuess, pickRandomAnswer } from '../data/dictionary';
 import { loadDefinition } from '../data/definitions';
-import { appendHistory, loadProgress, saveProgress } from '../storage/repository';
+import { appendHistory, loadPrefs, loadProgress, savePrefs, saveProgress } from '../storage/repository';
 import { computeAnswersHash } from '../storage/schema';
 import type { ProgressRecord } from '../storage/schema';
 import { buildAnnouncement, buildDefinitionsAnnouncement } from './announce';
@@ -482,15 +482,38 @@ function providerReducer(slice: Slice, action: ProviderAction): Slice {
   }
 }
 
+/**
+ * The variant/mode the player last had on screen, from `prefs`. Validated
+ * here rather than trusted: `loadPrefs` merges defaults over whatever
+ * `JSON.parse` produced and does not check values (see its own doc comment),
+ * so a hand-edited or half-migrated record can hold anything. Anything
+ * unrecognised means "no opinion" and falls back to the first-visit default,
+ * Solo/Diário — the daily is what this game is for, and it also means a cold
+ * start never silently burns a random infinite answer nobody asked for.
+ */
+function storedActive(): { variant: Variant; mode: Mode } {
+  const prefs = loadPrefs();
+  const variant: unknown = prefs.lastVariant;
+  const mode: unknown = prefs.lastMode;
+  return {
+    variant: VARIANT_ORDER.includes(variant as Variant) ? (variant as Variant) : 'solo',
+    mode: MODES.includes(mode as Mode) ? (mode as Mode) : 'diario',
+  };
+}
+
 function initSlice(): Slice {
-  const active: { variant: Variant; mode: Mode } = { variant: 'solo', mode: 'infinito' };
+  const active = storedActive();
+  const lastSeenDayKey = dayKeyOf(Date.now());
   const matches = emptyMatchMap();
-  matches[active.variant][active.mode] = loadOrCreateInfinite(active.variant, new Set());
+  matches[active.variant][active.mode] =
+    active.mode === 'diario'
+      ? loadOrCreateDaily(active.variant, lastSeenDayKey)
+      : loadOrCreateInfinite(active.variant, new Set());
   return {
     active,
     matches,
     pendingEffects: [],
-    lastSeenDayKey: dayKeyOf(Date.now()),
+    lastSeenDayKey,
     pendingDaily: { solo: null, dueto: null, quarteto: null },
   };
 }
@@ -541,6 +564,17 @@ export function MatchProvider({ children }: MatchProviderProps) {
   useEffect(() => {
     flushActiveProgress();
   }, [activeMatch.guesses, flushActiveProgress]);
+
+  // Which variant/mode is on screen, remembered across reloads — the other
+  // half of `storedActive`/`initSlice` above. Read-modify-write through
+  // `loadPrefs` rather than holding a `PrefsRecord` in state, because
+  // `useTheme` owns the same record and writes it from its own effect; each
+  // writer merging over the current stored value is what keeps them from
+  // clobbering one another. Runs on mount too, which is harmless: it writes
+  // back exactly what `initSlice` just read.
+  useEffect(() => {
+    savePrefs({ ...loadPrefs(), lastVariant: slice.active.variant, lastMode: slice.active.mode });
+  }, [slice.active]);
 
   // The draft, debounced: a keystroke must not hit storage on every press,
   // only once typing has paused for DRAFT_SAVE_DEBOUNCE_MS.

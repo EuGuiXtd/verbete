@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { MatchProvider } from '../../../state/MatchProvider';
 import { ModeTabs } from '../ModeTabs';
+import { loadPrefs, savePrefs } from '../../../storage/repository';
 
 // A small, deterministic stand-in for the real 1500-word daily pool — must
 // be distinct entries, not just distinct labels: dailyAnswers's real
@@ -38,6 +39,11 @@ beforeEach(() => {
   // record instead of the fresh match built from this suite's mocked
   // pickRandomAnswer sequence.
   localStorage.clear();
+  // C4: MatchProvider now opens on the variant/mode last used, defaulting to
+  // Solo/Diário on a genuinely first visit. This suite was written against
+  // the old hardcoded Solo/Infinito, so it states that preference explicitly
+  // rather than relying on a default that no longer exists.
+  savePrefs({ ...loadPrefs(), lastVariant: 'solo', lastMode: 'infinito' });
 });
 
 afterEach(() => {

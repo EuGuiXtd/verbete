@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { MatchProvider } from '../MatchProvider';
 import { useMatch } from '../useMatch';
+import { loadPrefs, savePrefs } from '../../storage/repository';
 
 // A small, deterministic stand-in for the real 1500-word daily pool — must
 // be genuinely distinct entries: dailyAnswers's real (unmocked) dedup loop
@@ -47,6 +48,11 @@ beforeEach(() => {
   // that share the same START system time would otherwise see identical
   // dayKeys/hashes and genuinely satisfy the restore path.
   localStorage.clear();
+  // C4: MatchProvider now opens on the variant/mode last used, defaulting to
+  // Solo/Diário on a genuinely first visit. This suite was written against
+  // the old hardcoded Solo/Infinito, so it states that preference explicitly
+  // rather than relying on a default that no longer exists.
+  savePrefs({ ...loadPrefs(), lastVariant: 'solo', lastMode: 'infinito' });
   vi.useFakeTimers();
   vi.setSystemTime(START);
   document.documentElement.style.setProperty('--reveal-duration', '0ms');

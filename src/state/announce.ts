@@ -179,27 +179,36 @@ function buildFinishedSuffix(status: 'won' | 'lost', state: MatchState): string 
  * means only the new, actually-new text is ever spoken.
  *
  * Mirrors `ResultModal`'s own per-board reveal — every board gets an entry,
- * win or lose, exactly like `VerbeteEntry` there — but only for a board
- * whose word actually has a generated definition (see `loadDefinition`'s
- * own doc comment on why that is not every word — a real, pre-existing gap
- * in the generated dictionary, not something this function can fix),
- * silently omitted otherwise, exactly as `ResultModal` itself omits the
- * whole gloss paragraph for one.
+ * win or lose, exactly like `VerbeteEntry` there. A board whose definition
+ * could not be loaded is NOT silently dropped: it gets the same honest
+ * "sem definição disponível" the sheet shows in its place. Silence there
+ * would be a listener's version of the blank gap the C2 review found on
+ * screen — indistinguishable from the announcement simply never arriving.
+ *
+ * `Definição`/`Definições` agrees with how many entries are actually being
+ * read, not with how many boards exist (the C1/C2 review's minor: a Dueto
+ * where only one board had a gloss said "Definições —" about a single item).
  */
+const NO_GLOSS = 'sem definição disponível';
+
 export function buildDefinitionsAnnouncement(
   boards: ReadonlyArray<{ readonly answer: string }>,
   rawDefinitions: readonly (string | null)[],
 ): string {
-  const entries = boards
-    .map((board, index) => {
-      const raw = rawDefinitions[index];
-      return raw === null || raw === undefined ? null : { answer: board.answer, gloss: parseDefinition(raw).gloss };
-    })
-    .filter((entry): entry is { answer: string; gloss: string } => entry !== null);
+  const entries = boards.map((board, index) => {
+    const raw = rawDefinitions[index];
+    return {
+      answer: board.answer,
+      gloss: raw === null || raw === undefined ? null : parseDefinition(raw).gloss,
+    };
+  });
 
   if (entries.length === 0) return '';
-  if (entries.length === 1 && boards.length === 1) {
-    return `Definição de ${entries[0]!.answer}: ${entries[0]!.gloss}.`;
+  if (entries.length === 1) {
+    const only = entries[0]!;
+    return only.gloss === null
+      ? `Sem definição disponível para ${only.answer}.`
+      : `Definição de ${only.answer}: ${only.gloss}.`;
   }
-  return `Definições — ${entries.map((entry) => `${entry.answer}: ${entry.gloss}`).join('; ')}.`;
+  return `Definições — ${entries.map((entry) => `${entry.answer}: ${entry.gloss ?? NO_GLOSS}`).join('; ')}.`;
 }
