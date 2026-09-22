@@ -68,29 +68,15 @@ export default defineConfig({
         // Default globPatterns is '**/*.{js,css,html}' — already enough to
         // catch the definitions chunk (Vite emits a dynamic JSON import as
         // its own hashed .js file, not a raw .json — verified in this
-        // task's report), but not the icons or the manifest itself.
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,ico}'],
-        // The Newsreader font is loaded from Google's CDN (index.html), not
-        // bundled — it cannot be precached (it isn't part of `dist/`), so it
-        // is runtime-cached instead: cached the first time it's fetched
-        // (i.e. during the online visit before a player ever goes offline),
-        // then served from that cache on every request after, online or not.
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/,
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'google-fonts-stylesheets' },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              cacheableResponse: { statuses: [0, 200] },
-              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-        ],
+        // task's report), but not the icons, the manifest, or the font
+        // files. Newsreader is self-hosted (src/index.css's own doc comment
+        // on its @font-face rules) specifically so it lands here, in the
+        // revisioned precache, rather than needing a cross-origin runtime
+        // cache that could only ever warm up AFTER a page had already
+        // fetched it once online — see this task's report for the offline
+        // gap that the old Google-Fonts runtime-caching route (removed
+        // here) actually had.
+        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,ico,woff2}'],
       },
       devOptions: { enabled: false },
     }),

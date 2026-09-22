@@ -221,6 +221,64 @@ measured option would have caught), and it keeps the exact same "does the defini
 stem" shape the original check already had — no new tokenization logic, no new edge cases to
 reason about in a place where safety, not cleverness, is the goal.
 
+## Newsreader variable font (`Newsreader[opsz,wght].ttf`, `Newsreader-Italic[opsz,wght].ttf`)
+
+- **Name:** Newsreader — a variable serif typeface, canonically distributed via the `google/fonts`
+  repository (the same distribution Google Fonts itself serves from)
+- **Author / credit:** The Newsreader Project Authors
+  (`http://github.com/productiontype/Newsreader`)
+- **URLs:**
+  - `https://raw.githubusercontent.com/google/fonts/main/ofl/newsreader/Newsreader%5Bopsz%2Cwght%5D.ttf`
+  - `https://raw.githubusercontent.com/google/fonts/main/ofl/newsreader/Newsreader-Italic%5Bopsz%2Cwght%5D.ttf`
+  - `https://raw.githubusercontent.com/google/fonts/main/ofl/newsreader/OFL.txt`
+- **Download date:** 2026-09-21
+- **Measured size (as downloaded — full designer range, unsubsetted):** `Newsreader[opsz,wght].ttf`
+  451,664 bytes; `Newsreader-Italic[opsz,wght].ttf` 495,684 bytes; `OFL.txt` 4,394 bytes
+- **Used for:** the game's body/display typeface (`--font-serif`, `src/styles/tokens.css`).
+  Previously loaded at runtime from Google Fonts (a third-party, cross-origin request that could
+  only be runtime-cached, not precached — see Task 24's report for the offline gap that was
+  measured to actually cause); self-hosted starting with Task 24 so it enters the service
+  worker's revisioned precache instead.
+- **Redistribution status: REDISTRIBUTED.** Subsetted, axis-instanced derivatives
+  (`public/fonts/Newsreader-Roman.woff2`, `public/fonts/Newsreader-Italic.woff2`) ship in the
+  built game bundle, alongside the unmodified `OFL.txt` (`public/fonts/OFL.txt`).
+
+### Licence
+
+**SIL Open Font License, Version 1.1** — read directly from the `OFL.txt` downloaded above, not
+asserted from memory. See `NOTICE.md` for the copyright line quoted verbatim and how this
+project's use (subsetting, instancing, bundling into a web game) maps to the licence's own
+numbered conditions.
+
+### Task 24 measured build results
+
+Both files were subsetted (`pyftsubset`) to exactly the characters this game's shipped UI and
+generated data render — derived by scanning `src/data/definitions.generated.json` and
+`src/data/answers.generated.ts` directly, not guessed: full ASCII, the Portuguese accented
+letters those two files actually contain (à á â ã ä ç é ê í ó ô õ ú and their uppercase forms —
+each confirmed present in Newsreader's own glyph set via `fontTools`, not assumed), and the
+typographic marks the Wikcionário-derived glosses use (em dash, curly quotes, ellipsis, middle
+dot, £, ¨). Characters found in real content but absent from Newsreader itself (Greek letters,
+card-suit/music symbols, subscript 2 — confirmed absent via the same `fontTools` check) were left
+out: they already render via the fallback stack with or without this change, so subsetting them
+out is not a regression.
+
+The `wght` and `opsz` axis ranges were then reduced from a second, separate measurement — every
+`font-weight`/`font-*` utility class and CSS `font-weight` declaration reachable in the shipped
+app (excluding `src/dev/Showcase.tsx`, which `showcase.html`'s own comment confirms is never a
+`vite build` input) — turned up exactly two weights ever used (400, 600) and confirmed every
+italic use renders at the default weight, at `text-micro`/`text-small`/`text-body` (12–17px)
+only, never at a display size:
+
+| File | Axes shipped | Reasoning | Size (woff2) |
+|---|---|---|---|
+| `Newsreader-Roman.woff2` | `wght` 350–650 (variable), `opsz` 6–72 (variable, untouched) | `opsz` kept fully variable because it is the browser-driven optical-size axis `tokens.css`'s own doc comment names as the reason a variable serif was chosen at all; `wght` instanced to one weight-step of headroom past the measured 400/600 bounds — not the wider 300–700 Google's stylesheet happened to request | 76,748 bytes |
+| `Newsreader-Italic.woff2` | `wght` 400, `opsz` 18 (both pinned — fully static, no `fvar`/`gvar`) | every italic use in the shipped app renders at the default weight, at sizes clustering around `opsz`'s own default (18); a second full variable face would pay for flexibility nothing in this app exercises | 13,888 bytes |
+
+**Total: 90,636 bytes** (self-hosted, precached) — down from an initial subset-only attempt at
+180,612 bytes before axis reduction, and comparable in order of magnitude to the 89,136-byte
+`definitions.generated.json` chunk already shipped, rather than dwarfing it.
+
 ## Summary table
 
 | Source | Redistributed? | Licence (as this project treats it) |
@@ -228,6 +286,7 @@ reason about in a place where safety, not cleverness, is the goal.
 | `pt_BR.dic` / `pt_BR.aff` (VERO) | Yes — generated word lists ship in the bundle | LGPL-3.0, additionally MPL to the extent upstream's unversioned grant permits (see "Licence" above — ambiguous upstream, four disagreeing downstream readings) |
 | `pt_br_50k.txt` (FrequencyWords) | No — build-time ranking input only | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (content), per upstream README |
 | `ptwiktionary.jsonl.gz` (kaikki/Wiktionary) | No, for the Task 8 head-form check (`answers.generated.ts`) — Yes, for Task 21's `src/data/definitions.generated.json` | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (Wikcionário) |
+| `Newsreader[opsz,wght].ttf` / `Newsreader-Italic[opsz,wght].ttf` | Yes — subsetted, axis-instanced derivatives ship in the bundle | [SIL Open Font License 1.1](https://scripts.sil.org/OFL) |
 
 ## Unresolved
 

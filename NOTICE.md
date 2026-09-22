@@ -62,3 +62,38 @@ file: the result screen that shows each definition links directly to
 `https://pt.wiktionary.org/wiki/<word>` — the specific article the text was adapted from, per
 word — which per CC BY-SA 4.0's own recommended practice is the most robust way to credit the
 original authors and to indicate that the material was adapted.
+
+## Newsreader typeface
+
+Added by Task 24. `public/fonts/Newsreader-Roman.woff2` and `public/fonts/Newsreader-Italic.woff2`
+(loaded via the `@font-face` rules in `src/index.css`) are subsetted, axis-instanced derivatives
+of the Newsreader variable font — previously loaded at runtime from Google Fonts, self-hosted
+starting with this task so it enters the service worker's revisioned precache instead of a
+cross-origin runtime cache (see `data/SOURCES.md` for the download URLs and date, and this task's
+report for the measured offline gap that motivated the change).
+
+**Adaptation made:** each file was subsetted to the characters this game's shipped UI and
+generated data actually render (see `data/SOURCES.md` for the exact character-set derivation),
+and the `wght`/`opsz` variable axes were reduced from the source's full ranges to what this
+project's own CSS was measured to use — `Newsreader-Roman.woff2` keeps `opsz` fully variable
+(6–72) with `wght` instanced to 350–650; `Newsreader-Italic.woff2` is instanced to a single
+static weight/optical-size pair (400, 18). Neither file is renamed, and neither claims to be the
+original, unmodified Newsreader distribution — see the licence note below on Reserved Font
+Names.
+
+**Licence:** **SIL Open Font License, Version 1.1**, read directly from the `OFL.txt` shipped
+with the same `google/fonts` distribution this project downloaded from (kept unmodified at
+`public/fonts/OFL.txt`), not asserted from memory. Its copyright line, quoted verbatim:
+
+> Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+
+The OFL's five numbered conditions, and how this project's use maps to each: (1) the font is not
+sold by itself — it ships bundled with this game's code, not distributed on its own; (2) every
+redistributed copy carries the copyright notice and licence — satisfied by `public/fonts/OFL.txt`
+shipping as its own file alongside the two font files it covers; (3) no Reserved Font Name is
+used by a modified version without permission — this project does not rename the typeface or
+present the subsetted files as anything other than a derivative of Newsreader; (4) the Copyright
+Holder's name is not used to promote this project — it appears only in this attribution notice;
+(5) the modified font remains under the same OFL licence, which this notice itself satisfies by
+not asserting any other licence for the font files. No condition in `public/fonts/OFL.txt`
+prohibits subsetting or axis instancing.

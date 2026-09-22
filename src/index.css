@@ -1,5 +1,68 @@
 @import './styles/tokens.css';
 
+/*
+ * Self-hosted Newsreader (Task 24) — see NOTICE.md and data/SOURCES.md for
+ * provenance/licence, and this task's report for how these two files were
+ * produced. Previously loaded from Google Fonts; moved same-origin so it
+ * enters the service worker's REVISIONED PRECACHE (public/fonts/*.woff2,
+ * see vite.config.ts's globPatterns) instead of a cross-origin runtime
+ * cache. That is not a cosmetic difference: a precached asset is fetched
+ * during the service worker's own install step, before it ever activates —
+ * so by the time a page confirms the worker is active (this app's own
+ * `pwa-offline.spec.ts` waits on exactly that), the font is GUARANTEED
+ * already cached, on the very first visit, with no second load required.
+ * The old Google-Fonts runtime-caching route could not make that guarantee
+ * (see this task's report for the measured gap that found).
+ *
+ * Two files, not four: `Newsreader-Roman.woff2` keeps the variable `opsz`
+ * axis intact (6–72) — the browser-driven optical-size axis is the entire
+ * reason a variable serif was chosen (see body's own comment below on
+ * `font-optical-sizing`) — but `wght` is instanced to 350–650, a measured
+ * range: grepping every font-weight declaration reachable in the shipped
+ * app (src/ui, src/index.css, excluding src/dev/Showcase.tsx, which never
+ * ships) turned up exactly two weights ever used, 400 (body default) and
+ * 600 (`font-semibold` / `.tecla`/`.celula`'s own `font-weight: 600`), so
+ * 350–650 is one weight-step of headroom past each measured bound, not the
+ * wider 300–700 Google's stylesheet happened to request.
+ * `Newsreader-Italic.woff2` is a fully STATIC instance (no `fvar`/`gvar` at
+ * all) pinned to weight 400 and `opsz` 18 (the axis's own default): every
+ * italic use in the shipped app (Header.tsx's "s.m.", ModeTabs.tsx's puzzle
+ * number, ResultModal.tsx's part-of-speech tag and footer links,
+ * HistoryModal.tsx's gloss) renders at the default weight, at
+ * text-micro/text-small/text-body (12–17px) — never at a display size —
+ * so a second full variable face would have paid for flexibility nothing
+ * in this app exercises. That is most of where the size saving came from:
+ * 95,940 bytes as a variable face down to 13,888 bytes static.
+ *
+ * `font-display: swap`: chosen over `optional` specifically because these
+ * files are precached — the only moment `swap`'s brief
+ * invisible-then-visible-if-slow behaviour can matter at all is the very
+ * first-ever page load, before the service worker exists to have cached
+ * anything, and even then it's a same-origin same-network fetch, not a
+ * third-party CDN round trip. `optional` would let the browser give up on
+ * the branded typeface entirely for that one page view if it didn't win a
+ * ~100ms race — silently keeping the fallback serif even after the file
+ * finished downloading in the background — which is the wrong trade for a
+ * product whose whole visual argument (tokens.css's own doc comment) rests
+ * on this specific typeface, not on avoiding a fractional-second reflow on
+ * the rarest possible page view.
+ */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 350 650;
+  font-display: swap;
+  src: url('/fonts/Newsreader-Roman.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Newsreader-Italic.woff2') format('woff2');
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

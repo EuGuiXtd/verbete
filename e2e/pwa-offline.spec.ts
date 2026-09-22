@@ -95,26 +95,32 @@ test.describe('offline play (real service worker)', () => {
     });
     expect(definitionsChunkCached).toBe(true);
 
-    // Newsreader (index.html's Google Fonts <link>, --font-serif in
-    // tokens.css) cannot live in the revisioned precache — it's a
-    // third-party origin, not part of `dist/` — so it can only be
-    // runtime-cached (vite.config.ts's `runtimeCaching` for
-    // fonts.googleapis.com/fonts.gstatic.com), and only AFTER this page has
-    // actually fetched it once online. Confirm that actually happened
-    // before relying on it offline below, the same "verify, don't assume"
-    // standard as the definitions chunk above.
-    const googleFontsCached = await page.evaluate(async () => {
+    // Newsreader is self-hosted (src/index.css's own doc comment) and part
+    // of the REVISIONED PRECACHE (public/fonts/*.woff2, matched by
+    // vite.config.ts's globPatterns) — unlike the Google Fonts runtime
+    // cache this replaced, a precached entry is fetched during the service
+    // worker's own install step, so it must already be cached at this
+    // exact point (right after confirming the worker is active), on a
+    // genuinely first-ever visit, with no second reload. That guarantee —
+    // not merely "the SW is active" — is what a prior version of this test
+    // found did NOT hold for the old cross-origin runtime-caching route
+    // (see this task's report for the measured gap).
+    const newsreaderFontsPrecached = await page.evaluate(async () => {
       const keys = await caches.keys();
+      let romanCached = false;
+      let italicCached = false;
       for (const key of keys) {
         const cache = await caches.open(key);
         const requests = await cache.keys();
-        if (requests.some((req) => /^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(req.url))) {
-          return true;
+        for (const req of requests) {
+          const path = new URL(req.url).pathname;
+          if (path === '/fonts/Newsreader-Roman.woff2') romanCached = true;
+          if (path === '/fonts/Newsreader-Italic.woff2') italicCached = true;
         }
       }
-      return false;
+      return romanCached && italicCached;
     });
-    expect(googleFontsCached).toBe(true);
+    expect(newsreaderFontsPrecached).toBe(true);
 
     // Now actually go offline, and prove the app survives a full reload —
     // not just still-open tabs, which would prove nothing about the

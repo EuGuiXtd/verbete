@@ -102,6 +102,37 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
             BY-SA 4.0.
           </p>
         </article>
+
+        <div className="folha-regua" />
+
+        <article>
+          <h3 className="text-lead font-semibold">Tipografia</h3>
+          <p className="mt-2">
+            O tipo usado neste jogo é o <strong>Newsreader</strong>, dos autores do projeto Newsreader
+            (
+            <a
+              href="http://github.com/productiontype/Newsreader"
+              target="_blank"
+              rel="noreferrer"
+              className="underline decoration-rule underline-offset-2"
+            >
+              github.com/productiontype/Newsreader
+            </a>
+            ), licenciado sob a{' '}
+            <a
+              href="https://scripts.sil.org/OFL"
+              target="_blank"
+              rel="noreferrer"
+              className="underline decoration-rule underline-offset-2"
+            >
+              SIL Open Font License 1.1
+            </a>
+            . Os arquivos aqui embutidos são derivados do original: reduzidos aos caracteres que este
+            jogo realmente usa e com os eixos variáveis de peso e tamanho óptico ajustados ao que a
+            interface efetivamente exige, para caber inteiramente no aplicativo instalável e funcionar
+            offline.
+          </p>
+        </article>
       </div>
     </Modal>
   );

@@ -32,6 +32,13 @@ describe('AboutModal', () => {
     expect(screen.getAllByText(/adaptad/i).length).toBeGreaterThan(0);
   });
 
+  it('credits Newsreader for the typeface and links to the OFL 1.1 licence text', () => {
+    render(<AboutModal isOpen onClose={() => {}} />);
+    expect(screen.getAllByText(/newsreader/i).length).toBeGreaterThan(0);
+    const oflLink = screen.getByRole('link', { name: /open font license/i });
+    expect(oflLink.getAttribute('href')).toBe('https://scripts.sil.org/OFL');
+  });
+
   it('does not assert a specific MPL version for VERO, matching NOTICE.md\'s own unresolved-version stance', () => {
     render(<AboutModal isOpen onClose={() => {}} />);
     expect(screen.queryByText(/mpl-1\.1|mpl 1\.1|mozilla public license.*version 1/i)).toBeNull();
