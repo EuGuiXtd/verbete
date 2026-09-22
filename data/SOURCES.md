@@ -94,10 +94,12 @@ not `unmunch`).
   18,216 as-is, and asked for no further tightening. Raw generated file: 30,653 bytes; **gzip -9:
   18,155 bytes**.
 
-- **Answer list: 1,617**, ranked by frequency, restricted to genuine head-forms per the
-  Portuguese Wiktionary (see below), NOSUGGEST/blocklist-filtered, collision-resolved — above
-  the 1,500-word `DAILY_POOL_SIZE` floor. Raw generated file: 19,504 bytes; **gzip -9: 6,473
-  bytes**.
+- **Answer list: 1,554**, ranked by frequency, restricted to genuine head-forms per the
+  Portuguese Wiktionary (see below), NOSUGGEST/blocklist-filtered, collision-resolved, and
+  finally restricted to words that actually have a definition (see "Final-review revision"
+  below) — above the 1,500-word `DAILY_POOL_SIZE` floor, with 54 words of headroom. Raw
+  generated file: 18,905 bytes; **gzip -9: 6,338 bytes**. (Before the final-review revision this
+  list held 1,617 words, 141 of which revealed nothing at the end of a match.)
 
   This required a controller-ruled change mid-task: the first version of this pipeline used
   VERO's own `.dic` structure to decide "is this a genuine head-form (not a conjugation or
@@ -179,7 +181,7 @@ not `unmunch`).
   decides answer-list membership (Task 8, `answers.generated.ts`) remains build-time only — no
   Wiktionary text is copied into that file, only word strings, same as `pt_br_50k.txt` below.
   **`src/data/definitions.generated.json` (Task 21) is REDISTRIBUTED**: it embeds one shortened
-  gloss per answer (1,476 of 1,617), which is actual Wiktionary sense text and carries the CC BY-
+  gloss per answer (all 1,554 of them), which is actual Wiktionary sense text and carries the CC BY-
   SA 4.0 obligation `NOTICE.md` documents for it — attribution is given via the result screen's
   link to the specific `https://pt.wiktionary.org/wiki/<word>` article each definition came from.
 - **Fetched automatically:** `scripts/fetch-sources.ts` downloads this file like the other three
@@ -191,10 +193,12 @@ not `unmunch`).
 ### Task 21 measured build results
 
 `src/data/definitions.generated.json`: **1,476 of 1,617 answers (91.3%)** got a usable, non-
-spoiling definition; the remaining 141 have none, either because the eligible Wiktionary entries
-for that word had no non-empty gloss, or because every gloss found would have contained the
-answer's own stem — a dropped word stays a fully playable answer, it just gets no definition
-line at the reveal. Raw generated file: 89,136 bytes; **gzip -9: 34,438 bytes** (comfortably
+spoiling definition at the time of Task 21; the remaining 141 had none, either because the
+eligible Wiktionary entries for that word had no non-empty gloss, or because every gloss found
+would have contained the answer's own stem. Those 141 stayed in the answer pool and revealed
+nothing at the end of a match — which the final whole-branch review reopened as C1; see
+"Final-review revision" below for the numbers that actually ship. Raw generated file (Task 21):
+89,136 bytes; **gzip -9: 34,438 bytes** (comfortably
 inside the ~55–70 KB estimate the spec guessed at) — served as its own code-split chunk (Vite's
 dynamic-`import()` output, e.g. `dist/assets/definitions.generated-<hash>.js`), never part of the
 initial bundle. Longest generated value measured at 95 characters (the ~90-character gloss
@@ -220,6 +224,75 @@ a strict superset of every other option's rejections measured (nothing it lets t
 measured option would have caught), and it keeps the exact same "does the definition contain the
 stem" shape the original check already had — no new tokenization logic, no new edge cases to
 reason about in a place where safety, not cleverness, is the goal.
+
+### Final-review revision (C1): every answer has a definition
+
+The final whole-branch review measured what the 8.7% gap above actually costs a player against
+the real deck: **65 of the next 120 days had at least one board whose reveal was empty, 9 of the
+next 120 Solo dailies revealed nothing at all, and that day's own Solo daily (`curte`) was one
+of them.** Since `DAILY_POOL_SIZE` and `EPOCH_DAY_KEY` are frozen by design, the deck could only
+be corrected before the first player arrived.
+
+Diagnosed against the raw extract, the 141 gloss-less answers had three causes, in this
+proportion:
+
+| Cause | Count |
+|---|---|
+| Every candidate gloss contained the answer's own stem, so `spoilsAnswer` rejected all of them | 140 |
+| The eligible Wiktionary entries carried no gloss at all (`pasta`) | 1 |
+
+Proper nouns and untagged loanwords (`césar`, `marta`, `erica`, `honor`, `crack`, `flash`,
+`recém`, …) were a separate, overlapping population — every one of them reached the pool through
+the same all-senses-spoil path, because a gloss like "mamífero carnívoro (Martes martes)"
+restates the headword.
+
+Three changes, all in `scripts/build-dictionary.ts` and `data/blocklist.txt`:
+
+1. **Redaction instead of rejection.** `buildDefinition` now runs two passes. The first is
+   unchanged — prefer a sense that never mentions the word. The second, new one takes the first
+   sense that survives *redaction*: every word of the gloss carrying the answer's stem is
+   replaced with an em dash, the mark a printed dictionary uses for its own headword. `saber`
+   ships as "conhecimento; aquilo que se —" instead of not shipping at all. The spoiler
+   guarantee is unchanged and still hard: the string written to disk contains no occurrence of
+   the stem, and `assertDefinitionDoesNotSpoil` still runs over every shipped value and still
+   throws. Whole words are redacted, never the bare three letters ("—ar" would leak the rest of
+   "votar"). A redacted gloss is only kept if it still carries at least two real content words
+   (so "o mesmo que —", "ver —" and "plural de —" are refused) and needs at most two redactions
+   (which refuses exactly two glosses in this dataset: `avelã` and `bebum`). 80 of the 1,554
+   shipped definitions carry at least one redaction.
+2. **Untagged inflection entries excluded** (`isInflectionOnlyEntry`). wiktextract carries no
+   `form_of` marking for some plural/feminine/participle entries; their only evidence is a gloss
+   that reads "plural de lado", "feminino de magro", "particípio passado do verbo usar". An
+   entry whose *every* sense gloss starts with one of those grammatically-specific patterns is
+   no longer a head-form. This removes `lados`, `graus`, `moças`, `moços`, `rodas`, `calos`,
+   `magra`, `digna`, `meiga`, `usado` and `vendo` from the answer pool. Task 8 considered and
+   rejected an unanchored, any-sense version of this rule (see the `anões`/`redes` note in
+   `data/blocklist.txt`); the anchored, every-sense version measured **one** false positive on
+   the real data — `atriz`, whose sole Wiktionary sense is "feminino de ator" — which is an
+   accepted, documented cost. `atriz` remains a valid guess.
+3. **Five blocklist additions** — `césar`, `erica`, `marta`, `lúcia`, `pence` — for the
+   lowercased-first-name and untagged-loanword leaks the review named that survived the two
+   changes above.
+
+And one invariant, so none of this can regress silently: `assertBuildInvariants` now **fails the
+build** if any answer has no definition, and `pnpm dict:verify` runs the same assertion against
+the committed files on every push. An answer that has nothing to reveal is dropped from
+`answers.generated.ts` entirely rather than only being filtered out of the daily pool — that
+gives infinite mode the same guarantee as the daily, and it makes the rule a single sentence
+both gates can state. Such a word stays a fully valid **guess**; only the answer pool is
+affected.
+
+Measured result:
+
+| | Before | After |
+|---|---|---|
+| Answers | 1,617 | 1,554 |
+| Answers with a definition | 1,476 (91.3%) | 1,554 (**100%**) |
+| Answers in the frozen daily pool with no definition | 130 | **0** |
+| Next 120 days with ≥1 empty board | 65 | **0** |
+| Next 120 Solo dailies revealing nothing | 9 | **0** |
+
+Generated file: 94,332 bytes; **gzip -9: 36,322 bytes**. Longest value still 95 characters.
 
 ## Newsreader variable font (`Newsreader[opsz,wght].ttf`, `Newsreader-Italic[opsz,wght].ttf`)
 

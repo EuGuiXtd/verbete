@@ -15,7 +15,8 @@ by Raimundo Santos Moura and the LibreOffice pt-BR community
 
 **Adaptation made:** the affix rules were expanded against the dictionary's word stems, the
 result was filtered to five-letter forms only, and a subset of those was selected as candidate
-answers using frequency-based ranking (see the frequency-list notice below) and restricted to
+answers using frequency-based ranking (hermitdave/FrequencyWords, build-time only and never
+redistributed, so it owes no notice here — see `data/SOURCES.md`) and restricted to
 words confirmed as genuine dictionary head-forms by the Portuguese Wiktionary (Wikcionário; see
 the Wikcionário notice below — used here only to decide list membership, at build time, not
 redistributed as part of this word list; no Wiktionary text is embedded in it). What ships is a
@@ -35,8 +36,11 @@ permits. No specific MPL version is asserted.
 
 Added by Task 21. `src/data/definitions.generated.json` (produced by `pnpm dict:build` from
 `scripts/build-dictionary.ts`, sourced from `data/raw/ptwiktionary.jsonl.gz`) contains a short
-definition for 1,476 of this game's 1,617 answers (91.3%) — the rest have no usable, non-spoiling gloss
-(see "Adaptation made" below) are simply absent from the file, never from the answer list itself.
+definition for every one of this game's 1,554 answers. A word with no usable, non-spoiling gloss
+(see "Adaptation made" below) is absent from this file — and, since the reveal is the point of
+the game, it is dropped from the answer list too, staying a valid guess only. `pnpm dict:verify`
+enforces that one-to-one correspondence on every push.
+
 The file name differs from what this block originally announced (`data/definicoes.json`): it
 ships under `src/data/` instead, as a plain JSON module the game loads via a dynamic `import()`
 (see `src/data/definitions.ts`) rather than a top-level data file, so its ~35 KB (gzip) payload
@@ -48,11 +52,15 @@ non-empty and does not itself contain the answer's own stem is selected — a ch
 practice: Wiktionary's own first sense for "casar" is "ato de unir por casamento...", which
 contains "casa" and would spoil the game's own reward, so that entry falls through to its second
 sense instead (see `scripts/build-dictionary.ts`'s `assertDefinitionDoesNotSpoil` and
-`buildDefinition`). The selected gloss is whitespace-normalized and truncated to roughly 90
-characters on a word boundary, and prefixed with a part-of-speech abbreviation ("s.f.", "adj.",
-"v.", ...) derived from the same Wiktionary entry. This is a single sense selected out of however
-many the real entry has, shortened to fit a result screen — an adaptation, not a reproduction of
-the entry.
+`buildDefinition`). Where *no* sense of a word avoids its own stem — which is the ordinary case
+for a common headword, since a dictionary gloss naturally restates the word it defines — the
+first usable sense is kept with the offending words **redacted**, each replaced by an em dash
+the way a printed dictionary marks its own headword inside an entry ("saber" ships as
+"conhecimento; aquilo que se —"). The selected gloss is whitespace-normalized and truncated to
+roughly 90 characters on a word boundary, and prefixed with a part-of-speech abbreviation
+("s.f.", "adj.", "v.", ...) derived from the same Wiktionary entry. This is a single sense
+selected out of however many the real entry has, shortened and sometimes partly redacted to fit
+a result screen without spoiling it — an adaptation, not a reproduction of the entry.
 
 **Licence:** Wiktionary content is licensed under **CC BY-SA 4.0**
 (<https://creativecommons.org/licenses/by-sa/4.0/>).

@@ -19,6 +19,9 @@
 //   - no two answers share a normalized key (a player would type it, win,
 //     and be shown a different word)
 //   - at least DAILY_POOL_SIZE answers exist
+//   - every answer has a definition, so no board can ever reveal nothing
+//     (the daily pool is the first DAILY_POOL_SIZE of them, and the reveal
+//     is the point of the game — see assertBuildInvariants)
 //   - no shipped definition contains its own answer's stem (a spoiler)
 //
 // Run with: pnpm dict:verify
@@ -32,7 +35,7 @@ import definitions from '../src/data/definitions.generated.json';
 function main(): void {
   const guesses = Array.from(unpackWords(GUESSES_B64, GUESSES_COUNT), decodeWord);
 
-  assertBuildInvariants(guesses, [...ANSWERS]);
+  assertBuildInvariants(guesses, [...ANSWERS], definitions);
   assertDefinitionsDoNotSpoil(definitions);
 
   console.log(

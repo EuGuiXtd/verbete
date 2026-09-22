@@ -1,13 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import definitions from '../definitions.generated.json';
-import { answerPool } from '../dictionary';
+import { answerPool, dailyPool } from '../dictionary';
 import { normalize } from '../../engine/normalize';
 import { loadDefinition, parseDefinition } from '../definitions';
 
 describe('definitions.generated.json', () => {
-  it('covers most of the answer pool', () => {
-    const covered = answerPool().filter((w) => w in definitions).length;
-    expect(covered / answerPool().length).toBeGreaterThan(0.8);
+  it('covers every answer, including every word the daily deck can draw', () => {
+    // Not "most" (the pre-C1 bar was 0.8, and 8.7% of answers shipped with
+    // nothing to reveal — including that day's own Solo daily). Every match
+    // ends by revealing the answer's definition; an answer with none reveals
+    // a void. `assertBuildInvariants` enforces this at build time and
+    // `pnpm dict:verify` re-checks the committed files; this is the same
+    // invariant stated against the data the app actually imports.
+    const uncovered = answerPool().filter((w) => !(w in definitions));
+    expect(uncovered).toEqual([]);
+  });
+
+  it('keeps the frozen daily pool inside the covered set', () => {
+    // DAILY_POOL_SIZE and EPOCH_DAY_KEY are frozen, so a gloss-less word
+    // reaching the first DAILY_POOL_SIZE entries cannot be removed later
+    // without renumbering every past puzzle. This is the check that has to
+    // hold forever.
+    expect(dailyPool().every((w) => w in definitions)).toBe(true);
   });
 
   it('never contains the word it defines, or a derivational relative of it', () => {
@@ -56,10 +70,10 @@ describe('loadDefinition', () => {
     const [firstAnswer] = answerPool();
     expect(firstAnswer).toBeDefined();
     const definition = await loadDefinition(firstAnswer!);
-    // Not every answer has one (see the coverage test above) — but the very
-    // fact this resolves without throwing, against the real generated file
-    // via a dynamic import, is the property this test exists to check.
-    expect(definition === null || typeof definition === 'string').toBe(true);
+    // Every answer has one now (see the coverage test above), and this
+    // resolves it against the real generated file via a dynamic import —
+    // the plumbing this test exists to check.
+    expect(typeof definition).toBe('string');
   });
 
   it('returns null for a word with no entry', async () => {

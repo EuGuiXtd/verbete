@@ -8,16 +8,21 @@
 //     their accented display form, ranked by real-world frequency and
 //     restricted to genuine Wiktionary dictionary head-forms (no
 //     conjugations or plurals).
-//   - definitions.generated.json (Task 21) — a short, single-sense
-//     definition for as many answers as have a usable one, sourced from the
-//     same Wiktionary extract used above to decide answer eligibility. Each
-//     value is `"<pos abbrev> <gloss>"` (e.g. `"s.f. planta ornamental..."`),
+//   - definitions.generated.json (Task 21) — one short, single-sense
+//     definition for EVERY answer, sourced from the same Wiktionary extract
+//     used above to decide answer eligibility. Each value is
+//     `"<pos abbrev> <gloss>"` (e.g. `"s.f. planta ornamental..."`),
 //     never the bare gloss alone, so the result screen can show a real
 //     part-of-speech abbreviation without a second generated file. A word
 //     with no usable gloss (none found, or every candidate would spoil the
-//     answer — see assertDefinitionDoesNotSpoil below) is simply absent from
-//     this file; it is NOT dropped from answers.generated.ts, which is
-//     unaffected by anything in this section. This is a CC BY-SA 4.0
+//     answer even after redaction — see buildDefinition below) is dropped
+//     from answers.generated.ts too: every match ends by revealing the
+//     answer's definition, so an answer with nothing to reveal is not an
+//     answer. It stays a perfectly valid GUESS. assertBuildInvariants makes
+//     this an invariant the build and `pnpm dict:verify` both enforce, which
+//     matters because DAILY_POOL_SIZE and EPOCH_DAY_KEY are frozen: a
+//     regression here could not be corrected later without renumbering every
+//     past puzzle. This is a CC BY-SA 4.0
 //     adaptation of Wikcionário content: one sense selected per word, out of
 //     however many that entry has, and shortened to fit the result screen —
 //     see NOTICE.md for the licence block this ships under, and the UI's
@@ -41,7 +46,9 @@
 //   7. Drop NOSUGGEST-flagged words and the manual data/blocklist.txt.
 //   8. Resolve normalization collisions: keep the highest-frequency accented
 //      form per comparison key.
-//   9. Emit both generated files with the VERO licence header from NOTICE.md.
+//   9. Build one definition per surviving candidate and drop the candidates
+//      that have none — see buildDefinition and assertBuildInvariants.
+//  10. Emit both generated files with the VERO licence header from NOTICE.md.
 //
 // NOTE on step 3: the original design planned to cross-reference the DELAF_PB
 // part-of-speech database to strip proper nouns more precisely. That data was
@@ -125,7 +132,7 @@ export interface BuildResult {
   guesses: string[];
   /** Accented display forms, ranked best-first, deduplicated by key. */
   answers: string[];
-  /** Accented answer -> "<pos abbrev> <gloss>", for whichever answers have a usable one. See buildDefinitions. */
+  /** Accented answer -> "<pos abbrev> <gloss>". Keyed by exactly `answers`: every answer has one. See buildDefinitions. */
   definitions: Record<string, string>;
 }
 
@@ -171,14 +178,14 @@ async function loadFrequencyRank(): Promise<Map<string, number>> {
   return rank;
 }
 
-interface WiktionarySense {
+export interface WiktionarySense {
   readonly form_of?: readonly unknown[];
   readonly tags?: readonly string[];
   /** Sense definitions, core text first — see buildDefinition below. */
   readonly glosses?: readonly string[];
 }
 
-interface WiktionaryEntry {
+export interface WiktionaryEntry {
   readonly word: string;
   readonly lang_code: string;
   readonly pos: string;
@@ -232,8 +239,49 @@ function isEntirelyObscure(entry: WiktionaryEntry): boolean {
 }
 
 /**
+ * Glosses that ARE an inflection statement rather than a definition:
+ * "plural de moça", "feminino de magro", "particípio passado do verbo usar",
+ * "segunda pessoa do singular do presente do indicativo do verbo rodar".
+ *
+ * Anchored at the start of the gloss and required of EVERY sense of the
+ * entry (see isInflectionOnlyEntry) — the two properties that make this
+ * safe. Task 8 considered and rejected a "does the gloss start with 'plural
+ * de'" fallback (see data/blocklist.txt's note on `anões`/`redes`) because
+ * an unanchored, any-sense version produces false positives on ordinary
+ * prose ("arte: forma de expressão subjetiva…") and would drop genuinely
+ * independent headwords like "atriz" and "melhor". This version cannot: a
+ * word only loses its entry when Wiktionary offers nothing but the
+ * inflection statement itself, and "forma de" alone is deliberately NOT a
+ * pattern here — only the grammatically-specific "forma feminina/masculina/
+ * plural/verbal de". Measured effect on the real dataset is recorded in the
+ * final-review-fixes report.
+ */
+const INFLECTION_GLOSS_RE =
+  /^(?:plural|singular|feminino|masculino|diminutivo|aumentativo|superlativo|comparativo|particípio|gerúndio|infinitivo|(?:primeira|segunda|terceira) pessoa|forma (?:feminina|masculina|plural|verbal|conjugada)|flexão|conjugação)\b/i;
+
+/**
+ * True when every sense of this entry is an inflection statement — the
+ * untagged twin of isFormOf, for the entries where wiktextract carries no
+ * structured `form_of`/`form-of` marking at all and the only evidence is the
+ * gloss text. This is cause #1 of the C1 finding: `lados`, `graus`, `moças`,
+ * `moços`, `rodas`, `calos`, `magra`, `digna`, `meiga` and `usado` all
+ * reached ANSWERS as "head-forms" whose sole Wiktionary sense reads
+ * "plural de lado" / "feminino de magro" / "particípio passado do verbo
+ * usar".
+ */
+function isInflectionOnlyEntry(entry: WiktionaryEntry): boolean {
+  const senses = entry.senses ?? [];
+  if (senses.length === 0) return false;
+  return senses.every((sense) => {
+    const gloss = collapseWhitespace(sense.glosses?.[0] ?? '');
+    return gloss !== '' && INFLECTION_GLOSS_RE.test(gloss);
+  });
+}
+
+/**
  * Loads every genuine Portuguese Wiktionary head-form entry — `pos` in
- * ANSWER_ELIGIBLE_POS and not a form-of/inflection entry (see isFormOf) —
+ * ANSWER_ELIGIBLE_POS and not a form-of/inflection entry (see isFormOf and
+ * isInflectionOnlyEntry) —
  * keyed by word, in file order, with every qualifying entry kept (a word can
  * have more than one, e.g. both a noun and a verb reading). The *set* of
  * keys is the answer-eligibility authority (see the "head-form authority"
@@ -273,6 +321,7 @@ async function loadEligibleWiktionaryEntries(): Promise<Map<string, WiktionaryEn
     if (entry.lang_code !== 'pt') continue;
     if (!ANSWER_ELIGIBLE_POS.has(entry.pos)) continue;
     if (isFormOf(entry)) continue;
+    if (isInflectionOnlyEntry(entry)) continue;
     if (isTaggedForeignLoanword(entry)) continue;
     if (isEntirelyObscure(entry)) continue;
 
@@ -380,6 +429,103 @@ function spoilsAnswer(word: string, definition: string): boolean {
 }
 
 /**
+ * The mark a redacted word is replaced with. An em dash is what a printed
+ * dictionary prints in place of the headword inside its own entry, so this
+ * reads as typography rather than as damage.
+ */
+const REDACTION = '—';
+
+/** A word of the gloss, hyphens and apostrophes included so "longa-metragem" redacts as one token. */
+const GLOSS_WORD_RE = /\p{L}[\p{L}\p{M}'’-]*/gu;
+
+/**
+ * Replaces every word of `gloss` that carries `word`'s stem with REDACTION.
+ *
+ * This is the answer to the C1 review finding that spoilsAnswer rejected
+ * *every* gloss for common headwords whose definitions naturally restate the
+ * word — "saber": "conhecimento; aquilo que se sabe"; "votar": "aprovar ou
+ * eleger por meio de voto"; "poeta": "quem se dedica à poesia…". Dropping
+ * those words is the wrong trade: they are exactly the answers a player is
+ * most pleased to land on. Redacting the offending word keeps the gloss and
+ * keeps the guarantee, because the shipped string no longer contains the
+ * stem at all — assertDefinitionDoesNotSpoil still runs over the redacted
+ * result and still throws if anything slips through.
+ *
+ * Whole words are redacted, never the bare three letters: "—ar" would leak
+ * the rest of "votar". The cost is over-redaction where the stem lands
+ * mid-word in an unrelated term ("mais" carries "maior"'s stem MAI), which
+ * is the same false positive the plain-substring rule already accepts in
+ * exchange for having no blind spot — see definitionStem.
+ */
+function redactSpoilers(word: string, gloss: string): string {
+  const stem = definitionStem(word);
+  return gloss.replace(GLOSS_WORD_RE, (token) =>
+    normalize(token).includes(stem) ? REDACTION : token,
+  );
+}
+
+/**
+ * Words that carry no information once the headword beside them is redacted.
+ * "o mesmo que —", "plural de —", "forma reduzida de —" survive a bare word
+ * count but tell the player nothing, so they must not be shipped as the
+ * reward the whole game builds to.
+ */
+const EMPTY_GLOSS_WORDS = new Set([
+  'mesmo',
+  'mesma',
+  'forma',
+  'formas',
+  'plural',
+  'singular',
+  'feminino',
+  'feminina',
+  'masculino',
+  'masculina',
+  'variante',
+  'grafia',
+  'reduzida',
+  'abreviada',
+  'regressiva',
+  'particípio',
+  'pessoa',
+  'verbo',
+  'indicativo',
+  'subjuntivo',
+  'sinônimo',
+  'diminutivo',
+  'aumentativo',
+]);
+
+/**
+ * How many real content words a redacted gloss must still carry to be worth
+ * showing. Two, measured against this dataset: "conhecimento; aquilo que se
+ * —" (saber) has exactly two and is a usable definition, while "o mesmo que
+ * —" (bônus), "ver —" (crack) and "plural de —" (lados) have zero and are
+ * not. A content word is four letters or more, is not the redaction mark,
+ * and is not in EMPTY_GLOSS_WORDS.
+ */
+const MIN_CONTENT_WORDS = 2;
+
+/**
+ * How many redactions a gloss may carry before it stops being a definition
+ * and starts being a puzzle. Measured on this dataset: exactly two glosses
+ * exceed it — "fruta gerada pela —, — ou —, (Corylus —)" (avelã) and
+ * "pessoa viciada em — alcoólica ou com intoxicação alcoólica; —, —" (bebum)
+ * — and neither is worth showing a player.
+ */
+const MAX_REDACTIONS = 2;
+
+function countOccurrences(text: string, mark: string): number {
+  return text.split(mark).length - 1;
+}
+
+function contentWordCount(gloss: string): number {
+  return (gloss.match(GLOSS_WORD_RE) ?? []).filter(
+    (token) => token.length >= 4 && !EMPTY_GLOSS_WORDS.has(token.toLowerCase()),
+  ).length;
+}
+
+/**
  * The hard gate: throws — never warns — if `definition` would spoil `word`.
  * Wiktionary defines "casar" (a real answer — see src/data/answers.generated.ts)
  * with a first sense of "ato de unir por casamento...", which contains
@@ -403,23 +549,58 @@ export function assertDefinitionDoesNotSpoil(word: string, definition: string): 
  * Picks the first sense, across `entries` in file order, whose first gloss
  * is non-empty and does not spoil `word` (see spoilsAnswer) — "casar"'s own
  * first sense is skipped this way in favour of its second ("ligar; juntar;
- * unir"), rather than failing the whole word. Returns null when nothing
- * eligible survives (no gloss anywhere, or every candidate spoils): the word
- * is then simply absent from definitions.generated.json, per this file's own
- * top-of-file note — it stays a perfectly playable answer regardless.
+ * unir"), rather than failing the whole word.
+ *
+ * Two passes, in quality order:
+ *
+ *   1. A gloss that never mentions the word at all. Always preferred: it
+ *      reads exactly as Wiktionary wrote it.
+ *   2. Failing that, the first gloss that survives redaction (see
+ *      redactSpoilers) with MIN_CONTENT_WORDS real words still standing.
+ *      Before this pass existed, 140 of the 141 gloss-less answers the C1
+ *      review measured were here — common headwords like "saber", "votar",
+ *      "reino" and "poeta" whose every sense restates them, which is what
+ *      Portuguese dictionary glosses do.
+ *
+ * Returns null when nothing survives either pass. With the daily-pool
+ * invariant in assertBuildInvariants that now means the word does not ship
+ * as an answer at all (it stays a valid guess) — see buildDictionary.
  */
-function buildDefinition(word: string, entries: readonly WiktionaryEntry[]): string | null {
-  for (const entry of entries) {
+export function buildDefinition(word: string, entries: readonly WiktionaryEntry[]): string | null {
+  const withAbbrev = (entry: WiktionaryEntry, gloss: string): string => {
     const abbrev = posAbbreviation(entry);
+    return abbrev === '' ? gloss : `${abbrev} ${gloss}`;
+  };
+
+  for (const entry of entries) {
     for (const sense of entry.senses ?? []) {
-      const rawGloss = sense.glosses?.[0];
-      if (rawGloss === undefined) continue;
-      const gloss = truncateAtWordBoundary(collapseWhitespace(rawGloss), MAX_GLOSS_LENGTH);
+      const gloss = truncateAtWordBoundary(
+        collapseWhitespace(sense.glosses?.[0] ?? ''),
+        MAX_GLOSS_LENGTH,
+      );
       if (gloss === '') continue;
       if (spoilsAnswer(word, gloss)) continue;
-      return abbrev === '' ? gloss : `${abbrev} ${gloss}`;
+      return withAbbrev(entry, gloss);
     }
   }
+
+  for (const entry of entries) {
+    for (const sense of entry.senses ?? []) {
+      const collapsed = collapseWhitespace(sense.glosses?.[0] ?? '');
+      if (collapsed === '') continue;
+      const redacted = truncateAtWordBoundary(
+        redactSpoilers(word, collapsed),
+        MAX_GLOSS_LENGTH,
+      );
+      // Belt and braces: truncation cannot reintroduce the stem, but a
+      // future change to either step must not be able to either.
+      if (spoilsAnswer(word, redacted)) continue;
+      if (contentWordCount(redacted) < MIN_CONTENT_WORDS) continue;
+      if (countOccurrences(redacted, REDACTION) > MAX_REDACTIONS) continue;
+      return withAbbrev(entry, redacted);
+    }
+  }
+
   return null;
 }
 
@@ -516,11 +697,20 @@ export async function buildDictionary(): Promise<BuildResult> {
     if (!answersByKey.has(key)) answersByKey.set(key, word);
   }
 
-  const answers = [...answersByKey.values()];
+  const deduped = [...answersByKey.values()];
   // Task 21: one short definition per answer that has a usable, non-spoiling
   // gloss, sourced from the very same eligible entries decided step 6's
   // membership above — see buildDefinitions and its doc comments.
-  const definitions = buildDefinitions(answers, wiktionaryEntries);
+  const definitions = buildDefinitions(deduped, wiktionaryEntries);
+
+  // Step 9 (C1): an answer with no definition reveals nothing, and the
+  // reveal is the whole point of the game — so it is not an answer. Dropping
+  // it here rather than only filtering the daily pool means infinite mode
+  // gets the same guarantee, and it keeps a single invariant the build and
+  // `pnpm dict:verify` can both state in one line: every answer has a
+  // definition. The word remains a perfectly valid GUESS — the guess list
+  // above is untouched by this.
+  const answers = deduped.filter((word) => definitions[word] !== undefined);
 
   return { guesses, answers, definitions };
 }
@@ -529,8 +719,17 @@ export async function buildDictionary(): Promise<BuildResult> {
  * These must actually throw and fail the build. The normalization-collision
  * check especially: if two answers share a comparison key, a player types
  * it, wins, and is shown a different word.
+ *
+ * `definitions` is the third invariant's subject (C1): every shipped answer
+ * must have one. It is optional only so a caller measuring the word lists
+ * alone can still use the first two checks; both real callers
+ * (`pnpm dict:build` and `pnpm dict:verify`) pass it.
  */
-export function assertBuildInvariants(guesses: string[], answers: string[]): void {
+export function assertBuildInvariants(
+  guesses: string[],
+  answers: string[],
+  definitions?: Readonly<Record<string, string>>,
+): void {
   const guessSet = new Set(guesses);
 
   for (const answer of answers) {
@@ -554,6 +753,23 @@ export function assertBuildInvariants(guesses: string[], answers: string[]): voi
       );
     }
     seen.set(key, answer);
+  }
+
+  if (definitions !== undefined) {
+    // C1's invariant. Every match ends by revealing the answer's real
+    // dictionary definition — that reveal is the point of the entire game,
+    // so an answer with nothing to reveal is a bug, not a rough edge. This
+    // has to be an invariant rather than a one-off list edit because
+    // DAILY_POOL_SIZE and EPOCH_DAY_KEY are frozen: once the first player
+    // has played, dropping a word from the pool renumbers every past puzzle,
+    // so a regression here can never be corrected the way this one was.
+    const glossless = answers.filter((answer) => definitions[answer] === undefined);
+    if (glossless.length > 0) {
+      throw new Error(
+        `${glossless.length} answer(s) have no definition and would reveal nothing: ` +
+          `${glossless.slice(0, 10).join(', ')}${glossless.length > 10 ? ', …' : ''}`,
+      );
+    }
   }
 
   if (answers.length < DAILY_POOL_SIZE) {
@@ -649,7 +865,7 @@ export async function writeGeneratedFiles(
 
 async function main(): Promise<void> {
   const { guesses, answers, definitions } = await buildDictionary();
-  assertBuildInvariants(guesses, answers);
+  assertBuildInvariants(guesses, answers, definitions);
   assertDefinitionsDoNotSpoil(definitions);
   await writeGeneratedFiles('src/data', guesses, answers, definitions);
   console.log(`guesses: ${guesses.length}`);

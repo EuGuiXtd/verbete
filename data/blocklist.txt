@@ -104,3 +104,15 @@ anões
 redes
 
 japão   # one qualifying sense is explicitly tagged pejorative (an ethnic-slur-adjacent synonym for "japonês"/Japanese); the other (an obscure regional synonym for "sapão", a large toad) is too obscure to justify keeping a word with an ethnically-charged pejorative sense — flagged for sensitivity, found in the systematic vulgar/pejorative-tag scan
+
+# Added by the final whole-branch review (C1). Each is a lowercase common
+# first name or an English word that only reached the answer pool because the
+# frequency list is lowercased — the same failure "souza", "lucas" and
+# "simão" were blocklisted for above. Each also happens to have a Wiktionary
+# gloss that survives only as a near-total redaction, which is how they
+# surfaced: the definition a player would be shown says nothing at all.
+césar   # the gloss is literally "designação comum ao general e ditador romano Júlio César…" — a Roman title/name, not a common noun anyone would define
+erica   # Erica is a plant GENUS (heather), so the gloss is "nome comum dado às plantas da família das ericáceas" — unrecognizable as a common noun; the frequency rank comes from the first name Érica/Erica
+marta   # the pine marten (Martes martes); its whole gloss redacts to "mamífero carnívoro (— —)" because the binomial repeats the headword, and the frequency rank comes from the first name Marta
+lúcia   # a plant genus (Lucya) whose gloss redacts to "nome para as plantas do gênero —"; the frequency rank comes entirely from the first name Lúcia — exactly the "lúcio"/"simão" case above
+pence   # English: the plural of penny. Not tagged Anglicism in this dataset, so isTaggedForeignLoanword misses it — same as "pager"/"remix"/"modem" above

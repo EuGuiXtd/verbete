@@ -30,7 +30,7 @@ const GENERATED_FILES = ['guesses.generated.ts', 'answers.generated.ts', 'defini
 
 async function main(): Promise<void> {
   const { guesses, answers, definitions } = await buildDictionary();
-  assertBuildInvariants(guesses, answers);
+  assertBuildInvariants(guesses, answers, definitions);
   assertDefinitionsDoNotSpoil(definitions);
 
   const tempDir = await mkdtemp(join(tmpdir(), 'verbete-dict-check-'));
