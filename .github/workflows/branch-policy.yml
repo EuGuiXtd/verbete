@@ -4,8 +4,8 @@ name: Branch policy
 # is not this repository's own dev branch. The other half -- blocking direct
 # pushes to main entirely -- is not something a workflow can enforce (a push
 # that skips PRs also skips whatever workflow would object to it); it is a
-# repository ruleset the user configures by hand. See
-# deploy/vps/README.md and this repo's Settings > Rules for that half.
+# repository ruleset the user configures by hand. See README.md's
+# "Configuração de repositório necessária" for that half.
 #
 # No checkout here on purpose: the only inputs this job needs are event
 # metadata (base/head branch, head repo), so a hostile fork PR never gets its
@@ -31,11 +31,11 @@ jobs:
           BASE_REPO: ${{ github.repository }}
         run: |
           if [ "${HEAD_REPO}" != "${BASE_REPO}" ]; then
-            echo "::error::pull requests into main must come from this repository's own dev branch, not a fork (${HEAD_REPO})"
+            echo "::error::PRs para main precisam vir da branch dev deste mesmo repositório, nunca de um fork (recebido: ${HEAD_REPO})"
             exit 1
           fi
           if [ "${HEAD_REF}" != "dev" ]; then
-            echo "::error::pull requests into main must come from dev (got ${HEAD_REF})"
+            echo "::error::PRs para main precisam vir de dev (recebido: ${HEAD_REF})"
             exit 1
           fi
-          echo "ok: PR into main comes from dev"
+          echo "ok: PR para main vem de dev"

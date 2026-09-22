@@ -1,8 +1,17 @@
-// CI gate: regenerates the dictionary into a temp directory and byte-compares
-// it against the committed src/data/*.generated.ts files. Exits non-zero if
-// they differ (raw sources changed, blocklist changed, or generation logic
-// changed without rerunning `pnpm dict:build`), so a stale committed
-// dictionary cannot merge.
+// LOCAL-ONLY gate, not run in CI: regenerates the dictionary into a temp
+// directory and byte-compares it against the committed src/data/*.generated.ts
+// files. Exits non-zero if they differ (raw sources changed, blocklist
+// changed, or generation logic changed without rerunning `pnpm dict:build`).
+//
+// Needs data/raw/* (see fetch-sources.ts), which is gitignored and does not
+// exist on a clean checkout — so this cannot run on a GitHub Actions runner.
+// It also isn't safe to run there even with `pnpm sources:fetch` added:
+// kaikki's ptwiktionary dump is a rolling upstream release, so a CI run
+// could fail because upstream published something new, not because of
+// anything in this repo. Run this by hand (after `pnpm sources:fetch`)
+// before committing a dictionary change. `pnpm dict:verify` is the
+// CI-safe subset that runs on every push — see that script's doc comment
+// for exactly what it does and does not confirm.
 //
 // Run with: pnpm dict:check
 

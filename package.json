@@ -17,7 +17,8 @@
     "test:e2e": "vite build && playwright test",
     "sources:fetch": "pnpm dlx tsx scripts/fetch-sources.ts",
     "dict:build": "tsx scripts/build-dictionary.ts",
-    "dict:check": "tsx scripts/check-dictionary.ts"
+    "dict:check": "tsx scripts/check-dictionary.ts",
+    "dict:verify": "tsx scripts/dict-verify.ts"
   },
   "dependencies": {
     "react": "^19.3.0",

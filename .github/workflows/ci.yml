@@ -1,20 +1,28 @@
 name: CI
 
-# Runs on every push (any branch) and on pull requests, so a feature branch or
-# a PR into dev/main gets fast feedback. This job never touches deployment
-# secrets and only ever needs read access to the repository, so a pull_request
-# from a fork (which GitHub Actions runs with a read-only token and no repo
-# secrets) is safe to build and test here: the worst a hostile PR can do is
-# waste runner minutes, not exfiltrate anything.
+# Pushes only to dev/main, plus every pull request. A push trigger on '**'
+# would fire alongside the pull_request trigger for the same commit on any
+# branch that already has an open PR, running this whole job twice for no
+# reason; dev/main are the two branches that matter to see green even
+# without an open PR (a direct push, or the post-merge state), while a
+# feature branch gets its CI signal from the PR itself.
+#
+# This job never touches deployment secrets and only ever needs read access
+# to the repository, so a pull_request from a fork (which GitHub Actions
+# runs with a read-only token and no repo secrets) is safe to build and test
+# here: the worst a hostile PR can do is waste runner minutes, not
+# exfiltrate anything.
 #
 # Deliberately excluded: end-to-end tests (Playwright). See deploy.yml for
-# where those run and why — short version, they are the deploy gate, not a
-# per-push check, because they require a Chromium download that is slow and
-# because they only need to catch something once per merge to main, not once
-# per WIP push.
+# where those run and why — short version, they are the deploy gate (and,
+# for a PR into main specifically, also a pre-merge check there), not a
+# per-push check everywhere, because they require a Chromium download that
+# is slow and because this repo's e2e specs only need to catch something new
+# once a change is about to reach main, not on every WIP push to a feature
+# branch.
 on:
   push:
-    branches: ['**']
+    branches: [dev, main]
   pull_request:
 
 permissions:
@@ -55,16 +63,19 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      # Cheap and fully local (no network fetch, no browser): it regenerates
-      # the dictionary from the raw sources already checked into the repo and
-      # byte-compares the result against src/data/*.generated.ts. It only
-      # actually catches something when the raw sources, the blocklist, or
-      # the generation logic changed without a `pnpm dict:build` — which is
-      # rare — but because it costs a couple of seconds either way, there is
-      # no reason to special-case it to only those changes. Every push is
-      # cheap here, so every push gets it.
-      - name: Check generated dictionary is up to date
-        run: pnpm dict:check
+      # NOT `pnpm dict:check`: that command regenerates the dictionary from
+      # data/raw/*, which is gitignored on purpose (see fetch-sources.ts) and
+      # does not exist on a clean checkout — it would ENOENT on every runner,
+      # forever. `dict:verify` instead re-checks the COMMITTED generated
+      # files' own invariants (every answer is a valid guess, five-letter
+      # shape, no key collisions, pool size, no self-spoiling definition) by
+      # reusing the exact assertions the build itself runs, with no network
+      # and no raw sources needed. It cannot catch a stale build (only
+      # `pnpm dict:check`, run locally after `pnpm sources:fetch`, does
+      # that — see README.md), but it is cheap and local, so there is no
+      # reason to gate it further than "every push".
+      - name: Verify committed dictionary invariants
+        run: pnpm dict:verify
 
       - name: Build
         run: pnpm build

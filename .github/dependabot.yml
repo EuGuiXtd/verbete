@@ -1,14 +1,24 @@
 version: 2
 updates:
+  # target-branch: dev on both blocks, not the default branch (main):
+  # Dependabot opens its PRs with a `dependabot/...` head branch, and
+  # branch-policy.yml rejects any PR into main whose head isn't literally
+  # `dev` — against main, that would make every Dependabot PR permanently
+  # unmergeable. Against dev, it's just a normal PR that flows to main the
+  # same way any other change does.
+
   # Keep the pinned-by-SHA actions in .github/workflows up to date. Dependabot
   # opens a PR that bumps both the SHA and the trailing version comment; the
-  # branch-policy/CI gates above still apply to that PR like any other.
+  # branch-policy/CI gates above still apply to that PR like any other, since
+  # its final route into main is still main <- dev, unchanged.
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "npm"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
