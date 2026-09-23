@@ -72,13 +72,21 @@ else
   # --non-interactive + --expand: sem eles o certbot para para perguntar se
   # pode ampliar a linhagem, e por ssh sem tty isso e um erro, nao um prompt.
   # --key-type ecdsa mantem o tipo de chave que a linhagem ja usa.
+  #
+  # O www NAO entra, de proposito. O Let's Encrypt recusa o pedido que traz o
+  # www e o wildcard juntos: "Domain name www.devduraes.com.br is redundant
+  # with a wildcard domain in the same request". Descoberto pelo --ensaio em
+  # 23/set/2026, antes de tocar no certificado que ja servia o site no ar.
+  # A cobertura nao diminui: *.devduraes.com.br cobre o www, e o apex continua
+  # explicito, entao o vhost do rpg -- que serve os dois nomes -- segue valendo.
+  # Se alguem "consertar" isso recolocando o www, o certbot volta a falhar.
   ssh -i "${KEY}" -o BatchMode=yes "${VPS}" "sudo certbot certonly \
     --non-interactive --agree-tos --expand ${EXTRA} \
     --dns-cloudflare \
     --dns-cloudflare-credentials /root/.secrets/cloudflare-devduraes.ini \
     --dns-cloudflare-propagation-seconds 30 \
     --key-type ecdsa --cert-name ${LINHAGEM} \
-    -d ${LINHAGEM} -d www.${LINHAGEM} -d '*.${LINHAGEM}'"
+    -d ${LINHAGEM} -d '*.${LINHAGEM}'"
 fi
 
 echo

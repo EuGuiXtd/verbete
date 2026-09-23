@@ -327,6 +327,7 @@ Todos entram como scripts idempotentes em `deploy/vps/`, no modelo do `provision
 1. **DNS** — criar `verbete.devduraes.com.br` na Cloudflare como CNAME para o apex, **proxied**. Obrigatório: o ufw só libera 80/443 para as faixas da Cloudflare; registro cinza = site fora do ar.
 2. **Certificado** — expandir a linhagem `devduraes.com.br` para incluir o wildcard:
    `certbot certonly --dns-cloudflare --dns-cloudflare-credentials /root/.secrets/cloudflare-devduraes.ini --dns-cloudflare-propagation-seconds 30 --key-type ecdsa --cert-name devduraes.com.br -d devduraes.com.br -d www.devduraes.com.br -d '*.devduraes.com.br'`
+   > **Errado, corrigido em 23/set/2026.** O `-d www.devduraes.com.br` não pode estar aí: o Let's Encrypt recusa o pedido que traz o www e o wildcard juntos ("redundant with a wildcard domain in the same request"). O `--ensaio` do `deploy/vps/02-certificate.sh` pegou isso antes de tocar no certificado em produção. O comando válido é o mesmo sem o `-d www.`; o wildcard cobre o www e o apex continua explícito, então a cobertura não muda. Use o script, não este comando.
    Conferir que o deploy-hook `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` existe (um arquivo cobre todos os certificados). `certbot renew --dry-run` **não** executa deploy hooks — testar com `RENEWED_LINEAGE` na mão.
 3. **Layout** — `/srv/verbete/app` (arquivos servidos, dono `qyro:qyro`) e `/srv/verbete/bin/deploy-wrapper.sh` (dono `root`, 755).
 4. **Vhost** — `/etc/nginx/sites-available/verbete` + symlink, modelado no vhost do nossario.
