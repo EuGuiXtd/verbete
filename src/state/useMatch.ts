@@ -8,6 +8,8 @@ export interface UseMatchResult {
   readonly state: MatchState;
   readonly type: (letter: string) => void;
   readonly backspace: () => void;
+  /** Moves the insertion point within the active row — see MatchContextValue's own doc comment. */
+  readonly moveCursor: (index: number) => void;
   readonly submit: () => void;
   readonly newMatch: () => void;
   readonly isRevealing: boolean;
@@ -20,6 +22,8 @@ export interface UseMatchResult {
   readonly announcement: string;
   /** The dictionary-definition sentence, read through its own separate live region — see MatchContextValue's own doc comment. */
   readonly definitionAnnouncement: string;
+  /** The insertion point's new position, read through a third live region — see MatchContextValue's own doc comment. */
+  readonly positionAnnouncement: string;
   /** For ModeTabs: which of the six variant x mode matches is on screen. */
   readonly active: { readonly variant: Variant; readonly mode: Mode };
   readonly selectMode: (variant: Variant, mode: Mode) => void;

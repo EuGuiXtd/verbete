@@ -25,6 +25,16 @@ export interface RowProps {
    * component never needs to know about that half of the strategy.
    */
   readonly compact?: boolean;
+  /**
+   * The house the next typed letter lands in, or null for every row that is
+   * not the active one (feedback round 1, item 3). `WORD_LENGTH` is a legal
+   * value of the engine's cursor — "past the last house", where a complete
+   * draft parks it — and simply matches no tile here, which is the right
+   * rendering: there is no house to mark.
+   */
+  readonly cursorIndex?: number | null;
+  /** Passed straight to each Tile; see Tile's own doc comment on `onSelect`. */
+  readonly onSelectCell?: (index: number) => void;
 }
 
 /**
@@ -39,7 +49,7 @@ export interface RowProps {
  * (filled/empty) row has nothing to reveal, so every tile in it starts
  * from the same, zero, delay.
  */
-export function Row({ cells, shake = false, compact = false }: RowProps) {
+export function Row({ cells, shake = false, compact = false, cursorIndex = null, onSelectCell }: RowProps) {
   // Feedback round 1, item 2: the non-compact gap is now `gap-1` below `sm:`
   // and `gap-2` from there up. Solo barely notices (a 320px tile grows from
   // 51 to 54px a side), but Dueto — side by side at every width now, see
@@ -62,6 +72,8 @@ export function Row({ cells, shake = false, compact = false }: RowProps) {
           letter={cell.letter.toUpperCase()}
           state={cell.state}
           revealDelay={isScoredState(cell.state) ? index : 0}
+          isCursor={index === cursorIndex}
+          onSelect={onSelectCell === undefined ? undefined : () => { onSelectCell(index); }}
         />
       ))}
     </div>

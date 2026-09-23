@@ -49,6 +49,12 @@ export function HelpModal({ isOpen, onClose, onOpenAbout }: HelpModalProps) {
           the dialog shows the actual blocks next to their names.
         */}
         <Legend stacked />
+        <p>
+          Dá para <strong>escolher em qual bloco escrever</strong>: toque ou clique num bloco da linha que
+          você está preenchendo — ou use as setas <strong>&larr;</strong> e <strong>&rarr;</strong> — e as
+          letras passam a entrar a partir dali, em vez de sempre da esquerda para a direita. O bloco
+          escolhido fica marcado com um contorno.
+        </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
             <strong>Solo:</strong> 1 palavra, 6 tentativas.

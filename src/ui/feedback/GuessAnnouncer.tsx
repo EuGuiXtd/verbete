@@ -7,6 +7,16 @@ export interface GuessAnnouncerProps {
    * `text` above (Task 25 fix round 2, R2).
    */
   readonly definitionText: string;
+  /**
+   * The insertion point's new house, once the player moves it on purpose
+   * (feedback round 1, item 3) — see `buildCursorAnnouncement` in
+   * src/state/announce.ts. A third region for the same reason the second one
+   * exists: this one changes far more often than either of the others, and
+   * putting it in the atomic row/outcome region would both re-read that
+   * whole sentence on every arrow key AND destroy a summary the player may
+   * not have finished hearing.
+   */
+  readonly positionText: string;
 }
 
 /**
@@ -41,7 +51,7 @@ export interface GuessAnnouncerProps {
  * that only mounts once there is something to say would miss whichever
  * update happens to be its very first.
  */
-export function GuessAnnouncer({ text, definitionText }: GuessAnnouncerProps) {
+export function GuessAnnouncer({ text, definitionText, positionText }: GuessAnnouncerProps) {
   return (
     <>
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
@@ -49,6 +59,9 @@ export function GuessAnnouncer({ text, definitionText }: GuessAnnouncerProps) {
       </div>
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {definitionText}
+      </div>
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {positionText}
       </div>
     </>
   );

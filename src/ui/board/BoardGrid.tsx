@@ -5,6 +5,14 @@ export interface BoardGridProps {
   readonly state: MatchState;
   /** Forwarded to every Board — see Board's own doc comment on shakeToken. */
   readonly shakeToken?: number;
+  /**
+   * Forwarded to every Board, which narrows it to its own active row — see
+   * Board's own doc comment. One handler for all of them on purpose: Dueto
+   * and Quarteto share a single draft and therefore a single insertion
+   * point, so tapping the third house on ANY board moves the same cursor,
+   * which is the same thing typing a letter has always done.
+   */
+  readonly onSelectCell?: (index: number) => void;
 }
 
 /**
@@ -77,7 +85,7 @@ export interface BoardGridProps {
  * the box that was lying about its own height, not the row height that
  * genuinely still needs to be there.
  */
-export function BoardGrid({ state, shakeToken = 0 }: BoardGridProps) {
+export function BoardGrid({ state, shakeToken = 0, onSelectCell }: BoardGridProps) {
   const boardCount = state.boards.length;
   const compact = boardCount > 2;
 
@@ -91,7 +99,14 @@ export function BoardGrid({ state, shakeToken = 0 }: BoardGridProps) {
   return (
     <div className={containerClass}>
       {state.boards.map((_board, index) => (
-        <Board key={index} state={state} boardIndex={index} shakeToken={shakeToken} compact={compact} />
+        <Board
+          key={index}
+          state={state}
+          boardIndex={index}
+          shakeToken={shakeToken}
+          compact={compact}
+          onSelectCell={onSelectCell}
+        />
       ))}
     </div>
   );

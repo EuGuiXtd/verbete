@@ -576,6 +576,33 @@
   }
 
   /*
+   * The insertion point: which house the next typed letter lands in
+   * (feedback round 1, item 3). Only ever on one tile, only ever in the
+   * active row of a board still in play.
+   *
+   * An `outline`, not a border and not a background: a border would change
+   * the tile's box and shift every neighbour by 2px the moment the cursor
+   * arrived, and a background would fight the one channel this whole design
+   * reserves for meaning (`.sorte-preenchida`'s paper against a scored
+   * tile's ink — see tokens.css). An outline paints outside the box model
+   * entirely and costs no layout, which is also why `.tecla`'s focus ring is
+   * one. `outline-offset: -2px` draws it just inside the tile's own edge,
+   * for the same reason it does there: a ring outside the box would be the
+   * first thing in this row to need room the row has not got.
+   *
+   * `--ink`, deliberately not `--ink-red`: red is a hint in this game
+   * ("existe na palavra, lugar errado") and a mark that is not a hint must
+   * not borrow its colour. Ink reads against every surface this tile can
+   * have — `--paper-recess` when the house is empty, `--paper` when it holds
+   * an unsubmitted letter — since ink on paper clears 13:1 in both themes,
+   * and those two are the only backgrounds an ACTIVE row's tile ever has.
+   */
+  .sorte-cursor {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+
+  /*
    * The legend's swatch (src/ui/layout/Legend.tsx). It carries the real
    * `.sorte` + state classes, so everything about the ink, the deboss and
    * the knockout comes from the one source of truth above and cannot drift

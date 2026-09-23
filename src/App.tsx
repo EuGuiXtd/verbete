@@ -13,6 +13,7 @@ import { Shell } from './ui/layout/Shell';
 import { Keyboard } from './ui/keyboard/Keyboard';
 import { ResultModal } from './ui/modals/ResultModal';
 import { UpdatePrompt } from './ui/feedback/UpdatePrompt';
+import { useCallback } from 'react';
 import type { MouseEvent } from 'react';
 
 /**
@@ -44,9 +45,35 @@ function DailyRolloverBanner() {
 }
 
 function GameScreen() {
-  const { state, type, backspace, submit, toasts, dismissToast, shakeToken, announcement, definitionAnnouncement } =
-    useMatch();
-  usePhysicalKeyboard({ onLetter: type, onEnter: submit, onBackspace: backspace });
+  const {
+    state,
+    type,
+    backspace,
+    moveCursor,
+    submit,
+    toasts,
+    dismissToast,
+    shakeToken,
+    announcement,
+    definitionAnnouncement,
+    positionAnnouncement,
+  } = useMatch();
+  // The arrow keys arrive as a DIRECTION and leave as a house number: the
+  // hook has no business knowing where the cursor currently is, and the
+  // engine has no business knowing which key was pressed. Both ends of the
+  // clamp are the engine's (see its MOVE_CURSOR case), so `state.cursor + 1`
+  // from the last house, and the past-the-end position a complete draft
+  // parks in, both resolve there rather than here.
+  const moveCursorBy = useCallback(
+    (delta: number) => { moveCursor(state.cursor + delta); },
+    [moveCursor, state.cursor],
+  );
+  usePhysicalKeyboard({
+    onLetter: type,
+    onEnter: submit,
+    onBackspace: backspace,
+    onMoveCursor: moveCursorBy,
+  });
   const states = keyboardStates(state);
 
   return (
@@ -65,7 +92,11 @@ function GameScreen() {
             ToastHost, since it has nothing to do with rejection toasts and
             must never be positioned or visible.
           */}
-          <GuessAnnouncer text={announcement} definitionText={definitionAnnouncement} />
+          <GuessAnnouncer
+            text={announcement}
+            definitionText={definitionAnnouncement}
+            positionText={positionAnnouncement}
+          />
           {/* Positioned against Shell's <main>, not the viewport — see ToastHost.tsx. */}
           <ToastHost toasts={toasts} onDismiss={dismissToast} />
           {/*
@@ -87,7 +118,12 @@ function GameScreen() {
               on the board.
             */}
             <Legend />
-            <BoardGrid state={state} shakeToken={shakeToken} />
+            {/*
+              Feedback round 1, item 3: tapping a house in the active row
+              moves the insertion point there. BoardGrid narrows this to the
+              one row it can apply to — see Board.tsx.
+            */}
+            <BoardGrid state={state} shakeToken={shakeToken} onSelectCell={moveCursor} />
           </div>
           {/*
             Task 21: the end-of-match reveal. Renders nothing while
