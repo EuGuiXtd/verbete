@@ -65,13 +65,16 @@ export function Board({ state, boardIndex, shakeToken = 0, compact = false }: Bo
     }
   }
 
+  // The row-to-row gap tracks Row.tsx's own tile-to-tile gap exactly — see
+  // its comment (feedback round 1, item 2) for why the non-compact pair is
+  // responsive now rather than a flat `gap-2`.
   const wrapperClass = solved
     ? compact
       ? 'flex w-full flex-col gap-1 opacity-60 pointer-events-none'
-      : 'flex w-full flex-col gap-2 opacity-60 pointer-events-none'
+      : 'flex w-full flex-col gap-1 opacity-60 pointer-events-none sm:gap-2'
     : compact
       ? 'flex w-full flex-col gap-1'
-      : 'flex w-full flex-col gap-2';
+      : 'flex w-full flex-col gap-1 sm:gap-2';
 
   // Task 25 fix round 1 (F4): `aria-disabled` on a plain, role-less `<div>`
   // is not exposed as state by any accessibility tree — it only does

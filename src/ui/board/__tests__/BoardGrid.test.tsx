@@ -21,7 +21,7 @@ describe('BoardGrid', () => {
     expect(container.firstElementChild?.className).not.toMatch(/\bgrid-cols-2\b/);
   });
 
-  it('renders exactly two boards for a Dueto match, responsive to two columns rather than fixed at one', () => {
+  it('renders exactly two boards for a Dueto match, side by side at every width', () => {
     const state = createMatch({
       variant: 'dueto',
       mode: 'infinito',
@@ -32,12 +32,19 @@ describe('BoardGrid', () => {
     const { container } = render(<BoardGrid state={state} />);
 
     expect(boardWrappers(container)).toHaveLength(2);
-    // Stacked by default (narrow), side by side from the `sm:` breakpoint —
-    // never a hard 2x2, that is Quarteto's shape alone.
-    expect(container.firstElementChild?.className).toMatch(/\bsm:grid-cols-2\b/);
-    expect(container.firstElementChild?.className).not.toMatch(/(?<!sm:)\bgrid-cols-2\b/);
-    // Not the compact (Quarteto-only) tile scale.
+    // Feedback round 1, item 2: two columns UNCONDITIONALLY, never a
+    // breakpoint-gated `sm:grid-cols-2` over a stacked `grid-cols-1` base.
+    // That base is precisely what the owner hit — their screen was below
+    // the breakpoint, so Dueto rendered as one board with another below the
+    // fold. Both halves are asserted: the unprefixed class must be there,
+    // and no single-column base may survive alongside it.
+    expect(container.firstElementChild?.className).toMatch(/(?<!:)\bgrid-cols-2\b/);
+    expect(container.firstElementChild?.className).not.toMatch(/\bgrid-cols-1\b/);
+    // Not the compact (Quarteto-only) tile scale, but its own two-board one:
+    // a Dueto board owns half the content width, so the glyph ceiling the
+    // single-board clamp was tuned for is too generous (index.css).
     expect(container.firstElementChild?.className).not.toContain('grade-compacta');
+    expect(container.firstElementChild?.className).toContain('grade-dupla');
     // Task 25: a solved board must anchor to its row's own top line instead
     // of stretching to match a still-playing side-by-side neighbour — see
     // BoardGrid.tsx's own doc comment on `items-start` for the measured
@@ -45,7 +52,7 @@ describe('BoardGrid', () => {
     expect(container.firstElementChild?.className).toContain('items-start');
   });
 
-  it('renders all four boards for a Quarteto match as a fixed 2x2 grid, driven by board count alone', () => {
+  it('renders all four boards for a Quarteto match, two across on a phone and four across on a wide screen', () => {
     const state = createMatch({
       variant: 'quarteto',
       mode: 'infinito',
@@ -57,9 +64,18 @@ describe('BoardGrid', () => {
 
     const wrappers = boardWrappers(container);
     expect(wrappers).toHaveLength(4);
-    // Fixed 2 columns at every width — Quarteto never stacks to one column,
-    // unlike Dueto.
-    expect(container.firstElementChild?.className).toMatch(/(?<!sm:)\bgrid-cols-2\b/);
+    // Two columns as the base — Quarteto never stacks to one column at any
+    // width, however narrow.
+    expect(container.firstElementChild?.className).toMatch(/(?<!:)\bgrid-cols-2\b/);
+    expect(container.firstElementChild?.className).not.toMatch(/\bgrid-cols-1\b/);
+    // Feedback round 1, item 8: and four across from `lg:` up, where a 2x2
+    // left ~500px of screen empty either side while running off the bottom
+    // of the board area. Both the column count and the wider cap it needs to
+    // be worth anything are pinned — four across inside `max-w-md` would be
+    // four columns of unreadably small tiles, which is a different bug
+    // wearing this fix's clothes.
+    expect(container.firstElementChild?.className).toMatch(/\blg:grid-cols-4\b/);
+    expect(container.firstElementChild?.className).toMatch(/\blg:max-w-6xl\b/);
     // The compact tile scale that keeps four 9-row boards inside 100svh on
     // an iPhone SE — see index.css's `.grade-compacta`.
     expect(container.firstElementChild?.className).toContain('grade-compacta');

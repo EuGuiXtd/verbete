@@ -40,13 +40,20 @@ export interface RowProps {
  * from the same, zero, delay.
  */
 export function Row({ cells, shake = false, compact = false }: RowProps) {
+  // Feedback round 1, item 2: the non-compact gap is now `gap-1` below `sm:`
+  // and `gap-2` from there up. Solo barely notices (a 320px tile grows from
+  // 51 to 54px a side), but Dueto — side by side at every width now, see
+  // BoardGrid.tsx — is spending that 32px of inter-tile gap out of HALF the
+  // content width rather than all of it, where it is worth ~3px per tile.
+  // Written out as four complete class strings rather than assembled,
+  // exactly as the pre-existing pair already were.
   const rowClass = shake
     ? compact
       ? 'grid grid-cols-5 gap-1 tremor'
-      : 'grid grid-cols-5 gap-2 tremor'
+      : 'grid grid-cols-5 gap-1 tremor sm:gap-2'
     : compact
       ? 'grid grid-cols-5 gap-1'
-      : 'grid grid-cols-5 gap-2';
+      : 'grid grid-cols-5 gap-1 sm:gap-2';
   return (
     <div className={rowClass}>
       {cells.map((cell, index) => (

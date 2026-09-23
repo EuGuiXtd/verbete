@@ -537,6 +537,37 @@
   }
 
   /*
+   * Feedback round 1, item 8: from `lg:` up, BoardGrid lays Quarteto's four
+   * boards out in ONE row rather than 2x2, so each board's share of the
+   * width roughly halves again — but so does the height the grid needs, and
+   * the glyph ceiling tuned for a 2x2 on a phone is then far too low for a
+   * 1152px-wide row on a desktop (measured: a 20px letter sitting in a 44px
+   * tile). The whole point of the token living on an ancestor is that a
+   * second ancestor rule can retune it without Row.tsx or Tile.tsx knowing
+   * either exists. 1024px is Tailwind's own `lg:`, written here as a raw
+   * media query because a CSS custom property is not a utility.
+   */
+  @media (min-width: 1024px) {
+    .grade-compacta {
+      --text-tile: clamp(1rem, 2.2vw, 1.75rem);
+    }
+  }
+
+  /*
+   * Feedback round 1, item 2: Dueto is side by side at every width now (see
+   * BoardGrid.tsx), so each of its boards owns about half the content width
+   * instead of all of it — and `--text-tile`'s own `6vw` term was sized for
+   * a board spanning the whole of it. Halving that term is the entire
+   * change; the floor drops one step with it so a 320px screen still gets a
+   * letter that fits its ~25px tile, and the ceiling is untouched, because
+   * from `sm:` up the grid is capped at `max-w-3xl` and each board is wider
+   * than a Solo board ever gets.
+   */
+  .grade-dupla {
+    --text-tile: clamp(0.9375rem, 4.5vw, 1.875rem);
+  }
+
+  /*
    * The legend's swatch (src/ui/layout/Legend.tsx). It carries the real
    * `.sorte` + state classes, so everything about the ink, the deboss and
    * the knockout comes from the one source of truth above and cannot drift
