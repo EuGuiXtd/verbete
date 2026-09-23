@@ -98,16 +98,16 @@
    * and on a red one without needing a second colour.
    *
    * `.tecla` overrides this below (Task 25 fix round 2) with an INSET ring
-   * instead — see that rule's own doc comment for why: every `.tecla` this
-   * app has can sit inside a horizontally-scrolling row (Keyboard.tsx), and
-   * a ring drawn OUTSIDE the element has nowhere to go once that row's own
-   * box is exactly as tall as the keys inside it — clipped by the row's own
-   * `overflow-x-auto` (which makes `overflow-y` compute to `auto` too, a
-   * real CSS interop rule, not a bug of this app's own making). Padding
-   * that row to make room for an outset ring was tried first (fix round 1)
-   * and reverted: it cost 36px of keyboard height, measured to push Solo's
-   * own sixth row off screen at 360x800 and 375x812. An inset ring needs no
-   * room outside the box at all, so it costs nothing there.
+   * instead — see that rule's own doc comment for why. The original reason
+   * was clipping: a keyboard row was a scrollport (`overflow-x-auto`, which
+   * makes `overflow-y` compute to `auto` too), and a ring drawn OUTSIDE the
+   * element had nowhere to go once that row's box was exactly as tall as the
+   * keys in it. Feedback round 1, item 5 removed the scrollport, so nothing
+   * clips any more — but the inset ring stays, for the reason that outlived
+   * it: padding the row to make room for an outset ring was tried first (fix
+   * round 1) and reverted at a measured cost of 36px of keyboard height,
+   * enough to push Solo's own sixth row off screen at 360x800 and 375x812.
+   * An inset ring needs no room outside the box at all, so it costs nothing.
    */
   :focus-visible {
     outline: 2px solid var(--ink);
@@ -216,10 +216,11 @@
   /*
    * Task 25 fix round 2: `.tecla`'s own focus ring is INSET, not the
    * page-wide outset default (`:focus-visible` above) — see that rule's own
-   * doc comment for why. `outline-offset: -2px` draws the same 2px ink rule
-   * just inside the key's own edge instead of outside it, so it needs no
-   * extra room in the scrolling keyboard row that holds most `.tecla`
-   * elements. `outline` specifically, not `box-shadow`: outline is defined
+   * doc comment for why it is still inset now that the keyboard row no
+   * longer scrolls. `outline-offset: -2px` draws the same 2px ink rule just
+   * inside the key's own edge instead of outside it, so it needs no extra
+   * room in the row that holds most `.tecla` elements, and therefore costs
+   * that row no height. `outline` specifically, not `box-shadow`: outline is defined
    * to paint on top of an element's own descendants regardless of stacking
    * order, which is exactly what a segmented key's coloured bands
    * (`.tecla-multipla-fundo`, below — absolutely-positioned children) would
@@ -263,35 +264,42 @@
   }
 
   /*
-   * The scroll affordance for a keyboard row wider than the viewport (320px
-   * phones, and every width in Dueto/Quarteto). `data-edges` is measured in
-   * Keyboard.tsx's KeyboardRow — see its doc comment for why this is not a
-   * permanent fade — and names the side that has content scrolled out of
-   * view. The mask fades the row's own paint towards transparent over the
-   * last 28px, which reads as "this continues" against the sheet without
-   * adding a scrollbar, a shadow or a control.
+   * Feedback round 1, item 5. What used to live here was the scroll
+   * affordance for a keyboard row wider than the viewport: a measured
+   * per-side `mask-image` fade driven by a `data-edges` attribute, a scroll
+   * listener and a ResizeObserver in Keyboard.tsx. All of it is gone, and
+   * none of it is replaced, because a row can no longer be wider than the
+   * viewport — see Keyboard.tsx's `KeyboardRow` doc comment. A cue saying
+   * "there are more keys over there" is only honest while there are, and
+   * the honest fix was to stop there being any.
    *
-   * `mask-image` rather than a gradient background: the keys are opaque and
-   * fill the row's full height, so anything painted BEHIND them is invisible
-   * at exactly the edge where the cue is needed. A mask clips the element's
-   * painted result, children included. Autoprefixer adds the -webkit- form.
+   * What remains is the one dimension a flexible row still has to get right.
+   * The keys themselves divide the row's width (Key.tsx: `flex-1`,
+   * `min-w-0`), but a fixed `gap` would not divide with them — nine gaps of
+   * 4px is 36px of a 280px row, a full key and a half, and it is 36px whether
+   * the row is 280px or 1200px wide. A `clamp()` on `vw` makes the gap the
+   * same kind of quantity every other term in the row already is. The bounds:
+   * 2px is where a gap stops separating two keys at all, 6px is the
+   * `sm:gap-[6px]` this keyboard already used between ROWS, so the vertical
+   * and horizontal rhythm match on a desktop.
    */
-  .fila-teclado[data-edges='start'] {
-    mask-image: linear-gradient(to right, transparent 0, #000 28px);
+  .fila-teclado {
+    gap: clamp(2px, 0.8vw, 6px);
   }
 
-  .fila-teclado[data-edges='end'] {
-    mask-image: linear-gradient(to left, transparent 0, #000 28px);
-  }
-
-  .fila-teclado[data-edges='both'] {
-    mask-image: linear-gradient(
-      to right,
-      transparent 0,
-      #000 28px,
-      #000 calc(100% - 28px),
-      transparent 100%
-    );
+  /*
+   * "enviar" and "apagar" are six characters in a key sized like a key that
+   * holds one. They already get 1.8x a letter key's share of the row
+   * (Keyboard.tsx's `ActionKey`), which is enough at every width — but only
+   * if the label itself also scales, since 14px serif text has a width of
+   * its own that no amount of flex can talk down. Same `clamp()` shape as
+   * the gap above and for the same reason. The ceiling is `--text-small`,
+   * i.e. exactly the `.tecla` size it inherits today, so nothing changes
+   * from about 540px up; the 0.625rem floor keeps the word legible and
+   * measures ~29px at 280px, comfortably inside its ~41px share there.
+   */
+  .tecla-acao {
+    font-size: clamp(0.625rem, 2.6vw, var(--text-small));
   }
 
   /*

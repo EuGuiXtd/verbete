@@ -17,11 +17,38 @@ describe('Key', () => {
     expect(onPress).toHaveBeenCalledWith('A');
   });
 
-  it('meets the 44px touch target via sizing utilities', () => {
+  /**
+   * Feedback round 1, item 5 flipped the width half of this test on its
+   * head, and the old form had to go rather than be relaxed: it asserted
+   * `min-w-11`, a 44px FLOOR, which is the precise thing that made the row
+   * overflow every viewport narrower than ten of them. Height keeps its
+   * floor — vertical space is never the constraint here and 44px is the
+   * dimension that governs a mis-tap between rows. Width gets the opposite:
+   * a ceiling, plus a grow share and a zeroed minimum, which is what lets a
+   * key divide its row instead of demanding a slice of it. The real
+   * measurement of what that produces at eight viewports lives in
+   * e2e/keyboard-row-overflow-geometry.spec.ts, where a browser can see it;
+   * jsdom performs no layout, so this can only pin the intent.
+   */
+  it('carries a height floor and a width CEILING, never a width floor', () => {
     render(<Key letter="A" states={['unused']} onPress={vi.fn()} />);
     const button = screen.getByRole('button', { name: 'A' });
-    expect(button.className).toContain('min-w-11');
     expect(button.className).toContain('min-h-11');
+    expect(button.className).toContain('max-w-[2.75rem]');
+    expect(button.className).toContain('flex-1');
+    expect(button.className).toContain('min-w-0');
+    expect(button.className).not.toMatch(/\bmin-w-(?!0\b)/);
+  });
+
+  it('gives a segmented Dueto/Quarteto key the same geometry as a single-board one', () => {
+    render(<Key letter="A" states={['unused', 'unused', 'unused', 'unused']} onPress={vi.fn()} />);
+    const button = screen.getByRole('button', { name: 'A' });
+    // The segmented key used to be the ONE key with no narrow variant at all
+    // — a flat `min-w-11` at every width — which is why Dueto and Quarteto
+    // overflowed a 320px row far harder than Solo ever did.
+    expect(button.className).toContain('max-w-[2.75rem]');
+    expect(button.className).toContain('flex-1');
+    expect(button.className).not.toMatch(/\bmin-w-(?!0\b)/);
   });
 
   it('carries the pressable-key treatment class for an untried letter', () => {
