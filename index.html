@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Verbete — jogo de adivinhação de palavras em português." />
+    <meta name="theme-color" content="#e9e4da" />
+    <title>Verbete</title>
+
+    <!--
+      Pre-paint theme resolution. This has to be inline and synchronous: the
+      module bundle loads too late, and a dark-mode player would get a white
+      flash on every single load. It reads the same localStorage envelope
+      src/storage/ writes, and it fails silently — blocked storage, corrupt
+      JSON and a missing key all just fall through to the media query.
+
+      The two hex values are the only place tokens.css is duplicated. If
+      --paper changes there, change it here.
+    -->
+    <script>
+      (function () {
+        var PAPER = { light: '#e9e4da', dark: '#1a1815' };
+        var choice = 'system';
+        try {
+          var raw = window.localStorage.getItem('verbete:prefs');
+          var stored = raw ? JSON.parse(raw).data.theme : null;
+          if (stored === 'light' || stored === 'dark' || stored === 'system') {
+            choice = stored;
+          }
+        } catch (error) {
+          /* No storage, or nonsense in it. The media query governs. */
+        }
+        if (choice !== 'system') {
+          document.documentElement.setAttribute('data-theme', choice);
+        }
+        var prefersDark =
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var resolved = choice === 'system' ? (prefersDark ? 'dark' : 'light') : choice;
+        document.documentElement.style.backgroundColor = PAPER[resolved];
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', PAPER[resolved]);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,88 @@
+name: CI
+
+# Pushes only to dev/main, plus every pull request. A push trigger on '**'
+# would fire alongside the pull_request trigger for the same commit on EVERY
+# branch that has an open PR; restricting it to dev/main keeps that to the
+# two branches that must be green even with no PR open (a direct push, or
+# the post-merge state), while a feature branch gets its signal from the PR.
+#
+# Note the residual cost, since an earlier version of this comment claimed
+# the restriction avoided duplicate runs outright: in this repo's flow `dev`
+# usually DOES have an open PR into `main` while a release is in flight, so
+# a push to `dev` fires both triggers. That duplicate is accepted on
+# purpose. Dropping `dev` from the push trigger would leave a push to `dev`
+# with no open PR — which is the normal state between releases — with no CI
+# signal at all, which is the worse of the two.
+#
+# This job never touches deployment secrets and only ever needs read access
+# to the repository, so a pull_request from a fork (which GitHub Actions
+# runs with a read-only token and no repo secrets) is safe to build and test
+# here: the worst a hostile PR can do is waste runner minutes, not
+# exfiltrate anything.
+#
+# Deliberately excluded: end-to-end tests (Playwright). See deploy.yml for
+# where those run and why — short version, they are the deploy gate (and,
+# for a PR into main specifically, also a pre-merge check there), not a
+# per-push check everywhere, because they require a Chromium download that
+# is slow and because this repo's e2e specs only need to catch something new
+# once a change is about to reach main, not on every WIP push to a feature
+# branch.
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.5
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      # NOT `pnpm dict:check`: that command regenerates the dictionary from
+      # data/raw/*, which is gitignored on purpose (see fetch-sources.ts) and
+      # does not exist on a clean checkout — it would ENOENT on every runner,
+      # forever. `dict:verify` instead re-checks the COMMITTED generated
+      # files' own invariants (every answer is a valid guess, five-letter
+      # shape, no key collisions, pool size, no self-spoiling definition) by
+      # reusing the exact assertions the build itself runs, with no network
+      # and no raw sources needed. It cannot catch a stale build (only
+      # `pnpm dict:check`, run locally after `pnpm sources:fetch`, does
+      # that — see README.md), but it is cheap and local, so there is no
+      # reason to gate it further than "every push".
+      - name: Verify committed dictionary invariants
+        run: pnpm dict:verify
+
+      - name: Build
+        run: pnpm build

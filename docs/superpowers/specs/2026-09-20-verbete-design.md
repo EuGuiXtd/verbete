@@ -313,7 +313,7 @@ Sendo estático, o precedente certo na VPS é o **nossario** (nginx servindo arq
 ```
 nginx sites-enabled:  amgseg · nossario · qyro · rpg
 certificado devduraes.com.br:  devduraes.com.br, www.devduraes.com.br   ← SEM wildcard
-DNS devduraes.com.br:  A apex → 179.198.97.215 (proxied) · CNAME www (proxied)
+DNS devduraes.com.br:  A apex → <IP da origem, nao versionado> (proxied) · CNAME www (proxied)
 PM2:  qyro-web ×2, amgseg-web ×1   ← rpg-web NÃO existe
 /srv:  amgseg · nossario · qyro · rpg
 ```
@@ -327,6 +327,7 @@ Todos entram como scripts idempotentes em `deploy/vps/`, no modelo do `provision
 1. **DNS** — criar `verbete.devduraes.com.br` na Cloudflare como CNAME para o apex, **proxied**. Obrigatório: o ufw só libera 80/443 para as faixas da Cloudflare; registro cinza = site fora do ar.
 2. **Certificado** — expandir a linhagem `devduraes.com.br` para incluir o wildcard:
    `certbot certonly --dns-cloudflare --dns-cloudflare-credentials /root/.secrets/cloudflare-devduraes.ini --dns-cloudflare-propagation-seconds 30 --key-type ecdsa --cert-name devduraes.com.br -d devduraes.com.br -d www.devduraes.com.br -d '*.devduraes.com.br'`
+   > **Errado, corrigido em 23/set/2026.** O `-d www.devduraes.com.br` não pode estar aí: o Let's Encrypt recusa o pedido que traz o www e o wildcard juntos ("redundant with a wildcard domain in the same request"). O `--ensaio` do `deploy/vps/02-certificate.sh` pegou isso antes de tocar no certificado em produção. O comando válido é o mesmo sem o `-d www.`; o wildcard cobre o www e o apex continua explícito, então a cobertura não muda. Use o script, não este comando.
    Conferir que o deploy-hook `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` existe (um arquivo cobre todos os certificados). `certbot renew --dry-run` **não** executa deploy hooks — testar com `RENEWED_LINEAGE` na mão.
 3. **Layout** — `/srv/verbete/app` (arquivos servidos, dono `qyro:qyro`) e `/srv/verbete/bin/deploy-wrapper.sh` (dono `root`, 755).
 4. **Vhost** — `/etc/nginx/sites-available/verbete` + symlink, modelado no vhost do nossario.

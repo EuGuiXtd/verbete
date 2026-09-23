@@ -1,0 +1,272 @@
+name: Deploy
+
+# Two triggers, two jobs:
+#   - a pull request into main gets the `e2e` job as an early, pre-merge
+#     check (same cost as waiting for the post-merge push to fail, but it
+#     catches a broken build before main goes red and stays undeployed);
+#   - a push to main gets `e2e` again — belt and braces, a second
+#     independent run right before shipping, not a re-use of the PR run's
+#     result — followed by `deploy`, which never runs for a pull_request.
+#
+# Only `main` deploys, and only a push to `main` can reach the `deploy` job.
+# Branch protection on main (direct pushes blocked, PRs required to come
+# from dev — see branch-policy.yml and README.md's "Configuração de
+# repositório necessária") means a push to main normally only happens
+# through a reviewed, squash-merged PR, so whatever runs in `deploy` with
+# access to the deploy secrets is code a human already looked at before
+# merge — no CI system can substitute for that review. What THIS workflow
+# adds, independently of any branch-protection toggle: `deploy` `needs: e2e`
+# in the SAME run, on the SAME commit, so a type error or a failing test
+# cannot reach the live site through this pipeline even if "require branches
+# to be up to date" was left off or a required check was skipped.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Build and e2e test
+    runs-on: ubuntu-latest
+    # Cancel a superseded run of the SAME pull request or the SAME branch,
+    # but never cross-cancel between unrelated PRs, and never share this
+    # group with the deploy lock below — an unrelated PR's check has no
+    # business queuing behind, or in front of, a production deploy.
+    concurrency:
+      group: e2e-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.5
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fast checks before the slow one: seconds, next to a Chromium
+      # install, and running them here (not just trusting ci.yml already
+      # ran them) is what lets `deploy` below depend on THIS job instead of
+      # on a branch-protection setting.
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright's Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # No standalone `pnpm build` anywhere in this workflow: `test:e2e` is
+      # `vite build && playwright test` (see package.json), and
+      # playwright.config.ts serves the resulting dist/ with `vite preview`,
+      # never the dev server — so a pass here means the exact bytes a
+      # subsequent deploy would ship actually work in a browser. This step
+      # IS the build step.
+      - name: Build and run e2e tests against the production build
+        run: pnpm test:e2e
+
+  deploy:
+    name: Deploy to production
+    needs: e2e
+    if: github.event_name == 'push'
+    # Pinned, not `ubuntu-latest`: this job's rsync client is the one input
+    # that has to keep matching deploy-wrapper.sh's byte-exact allowlist for
+    # the compat block it sends (`-logDtprze.iLsfxCIvu`). A runner image
+    # rolling forward to a different rsync major is the one way that
+    # allowlist can start refusing a legitimate deploy with nothing in this
+    # repository having changed.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Scopes VPS_SSH_KEY/VPS_HOST/VPS_USER/VPS_HOST_KEY_FINGERPRINT to this
+    # job and this environment: see README.md's "Configuração de
+    # repositório necessária" for creating the `production` environment,
+    # putting the four secrets there instead of at repo level, and
+    # restricting its deployment branches to `main`. That restriction is the
+    # one control here that a mistaken edit to this file's `on:`/`if:`
+    # cannot route around, because it is enforced outside this file.
+    environment: production
+    # One deploy at a time, and never cancel one already talking to the VPS:
+    # the rsync below runs `--delete-after` against a live site, and killing
+    # it mid-transfer is a worse outcome than making the next push wait a
+    # couple of minutes in the queue.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      # Belt-and-braces: `on.push.branches` above already restricts when
+      # `deploy` can run, but the ref is re-checked from env (never
+      # interpolated into a run: block) so that a future edit to the
+      # trigger can't silently turn this into a deploy from an arbitrary
+      # ref.
+      - name: Confirm this run is for main
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::deploy.yml só pode rodar em refs/heads/main (recebeu ${REF})"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.5
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # This job runs on its own fresh runner (jobs don't share a
+      # filesystem), so dist/ from the `e2e` job above does not carry over.
+      # Rebuilding and re-running e2e here — instead of trusting the sibling
+      # job's result and downloading its dist/ as an artifact — is the
+      # deliberate "braces" half of belt-and-braces: an independent
+      # verification of the exact commit about to be rsynced, immediately
+      # before it ships, not a re-use of an earlier one.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright's Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build and run e2e tests against the production build
+        run: pnpm test:e2e
+
+      - name: Configure the deploy SSH key
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/verbete_deploy"
+          chmod 600 "$HOME/.ssh/verbete_deploy"
+
+      # StrictHostKeyChecking=no (or =accept-new on a runner that never kept
+      # a previous known_hosts) both amount to trusting whatever key answers
+      # on port 22, which is exactly the MITM window between a GitHub-hosted
+      # runner and the VPS. Instead: fetch the key fresh every run, but only
+      # trust it if it matches a fingerprint the human operator captured
+      # out-of-band (e.g. `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`
+      # run directly on the VPS, or from a connection already known-good) and
+      # stored as a secret. A mismatch fails the deploy instead of silently
+      # trusting an unverified host.
+      - name: Fetch and verify the VPS host key
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          EXPECTED_FINGERPRINT: ${{ secrets.VPS_HOST_KEY_FINGERPRINT }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          if ! ssh-keyscan -t ed25519 -T 10 "$VPS_HOST" > /tmp/vps_host_key.pub 2>/tmp/vps_host_key.err; then
+            echo "::error::não deu pra buscar a chave de host da VPS: $(cat /tmp/vps_host_key.err)"
+            exit 1
+          fi
+          [ -s /tmp/vps_host_key.pub ] || { echo "::error::ssh-keyscan não devolveu nada para a VPS"; exit 1; }
+          actual=$(ssh-keygen -lf /tmp/vps_host_key.pub | awk '{print $2}')
+          if [ "$actual" != "$EXPECTED_FINGERPRINT" ]; then
+            echo "::error::fingerprint da chave de host da VPS não bate (recebido ${actual}) -- recusando o deploy"
+            exit 1
+          fi
+          cat /tmp/vps_host_key.pub >> "$HOME/.ssh/known_hosts"
+
+      # A single rsync, matched byte-for-byte against what
+      # deploy/vps/deploy-wrapper.sh accepts. This exact shape
+      # (`-az --delete-after`) is pinned as a case in
+      # deploy/vps/test-deploy-wrapper.sh and rehearsed by
+      # deploy/vps/05-deploy-key.sh, so changing it here fails there.
+      #
+      # `--delete-after` instead of a bare `--delete`: rsync only removes a
+      # file with no replacement once the WHOLE transfer has landed, not
+      # while new files are still arriving. That protects a client whose
+      # already-loaded index.html still references an old hashed asset from
+      # hitting a 404 mid-deploy — the old file stays put until every new
+      # file is already there. It does NOT protect the other direction: a
+      # new index.html becoming reachable before the new hashed assets it
+      # references have finished uploading, because rsync's per-file
+      # transfer order isn't something either --delete flag controls. That
+      # risk is real and unaddressed here — fixing it for real would need
+      # an atomic build-then-symlink-swap deploy, which needs a destination
+      # shape the wrapper deliberately doesn't allow (see
+      # deploy-wrapper.sh's own "friction is deliberate" note) — out of
+      # scope for this task.
+      #
+      # Retried because some GitHub-hosted runners cannot reach port 22 on
+      # the VPS intermittently (a known flake, not a server problem);
+      # ConnectTimeout keeps a bad connection attempt from hanging, and the
+      # ServerAlive options keep a connection that goes quiet mid-transfer
+      # (rather than refusing outright) from stalling the job for the rest
+      # of this job's 20-minute timeout — both are ssh/client-side options,
+      # so the wrapper (which only ever sees the resulting `rsync --server`
+      # argv, never the ssh invocation around it) is unaffected.
+      - name: Deploy over rsync
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          max_attempts=3
+          attempt=0
+          until [ "$attempt" -ge "$max_attempts" ]; do
+            attempt=$((attempt + 1))
+            echo "tentativa de rsync ${attempt}/${max_attempts}"
+            if rsync -az --delete-after \
+                -e "ssh -i $HOME/.ssh/verbete_deploy -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4" \
+                dist/ "${VPS_USER}@${VPS_HOST}:/srv/verbete/app/"; then
+              echo "rsync deu certo na tentativa ${attempt}"
+              exit 0
+            fi
+            echo "rsync falhou na tentativa ${attempt}"
+            [ "$attempt" -lt "$max_attempts" ] && sleep 10
+          done
+          echo "::error::rsync falhou depois de ${max_attempts} tentativas"
+          exit 1
+
+      # A failure here, after retries, means the site didn't answer 200
+      # right after this deploy — it does not by itself prove what state
+      # the previous rsync left things in (a transient blip in the
+      # connection FROM this runner would look the same), only that
+      # something needs a human's attention right now. There is no separate
+      # alerting here, so this curl IS the alert. Recovery is the same
+      # rsync again: it's idempotent, so fixing the problem and re-running
+      # (or pushing again) fully reconciles /srv/verbete/app/ regardless of
+      # what a failed attempt left behind.
+      - name: Verify the site is up
+        run: |
+          status=$(curl -sI --max-time 10 --retry 3 --retry-delay 5 -L https://verbete.devduraes.com.br | head -1)
+          echo "${status}"
+          case "${status}" in
+            *200*) ;;
+            *) echo "::error::esperava HTTP/2 200 em verbete.devduraes.com.br, recebeu: ${status}"; exit 1 ;;
+          esac

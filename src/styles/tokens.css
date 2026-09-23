@@ -1,0 +1,203 @@
+/*
+ * Verbete — design tokens.
+ *
+ * The metaphor is a letterpress shop, not a card kit. Light mode is a sheet
+ * of cotton rag under shop light; dark mode is the press bed — the metal
+ * matrix seen under a low lamp — so the ink goes light and the paper goes
+ * away. Nothing here is decorative: every value below is load-bearing for
+ * the one idea this design rests on.
+ *
+ * THE IDEA: ink coverage is the hint.
+ *
+ *   letter right, place right  -> block fully inked (--ink), letter knocked
+ *                                 out of the block in paper (--knockout)
+ *   letter present, wrong place-> block inked in the spot red (--ink-red),
+ *                                 letter knocked out in paper
+ *   letter absent              -> block never inked: a blind deboss in the
+ *                                 sheet, letter in --ghost
+ *
+ * The three states are therefore separated by VALUE, not only by hue —
+ * dark / mid / paper. Measured (8-bit grey, luma on the GAMMA-ENCODED sRGB
+ * bytes — i.e. the same weights the browser's own `filter: grayscale()`
+ * uses, not a linear-light conversion):
+ *
+ *   light:  ink 27   ink-red 84    paper 228
+ *   dark:   ink 231  ink-red 118   paper 24
+ *
+ * That separation is what buys colour accessibility without a second
+ * "colour-blind palette", and it is the thing that makes this game not look
+ * like every other Wordle clone. If you change --ink or --ink-red, re-check
+ * them in greyscale first — with `filter: grayscale()` luma, the method
+ * above, not a linear-light one (they disagree by ~18 grey levels on
+ * --ink-red and will send you chasing a mismatch that isn't there).
+ *
+ * Contrast floors this palette holds:
+ *   --ink on --paper            >= 13:1
+ *   --ghost on any paper tone   >= 4.5:1   (the absent letter must be read)
+ *   --knockout on --ink-red     >= 4.5:1   (the knocked-out letter)
+ *   --ink-red against --ink     >= 3:1     (the two inked states, by value)
+ */
+
+:root {
+  color-scheme: light;
+
+  /* --- paper -------------------------------------------------------- */
+  /* Cotton rag: warm GREY, deliberately not cream. Cream + serif +
+     terracotta is the house style of generated interfaces; this is a
+     pressroom, so the sheet is grey and the warmth comes from the ink. */
+  --paper: #e9e4da;
+  /* The lit face of something standing proud of the sheet: a key, a block. */
+  --paper-raised: #f1ede5;
+  /* An empty slot in the composing stick — pressed, never inked. */
+  --paper-recess: #ded7ca;
+  /* What a letter is knocked out in: the sheet showing through the ink.
+     One 8-bit notch lighter than --paper (#e9e4da) — invisible to the eye,
+     but --paper landed at 4.4981:1 on --ink-red, just under the 4.5:1 this
+     file commits to. Nudging --knockout instead of --ink-red keeps
+     --ink-red vs --ink (only 3.01:1, its own thin floor) untouched. */
+  --knockout: #e9e5da;
+
+  /* --- ink ---------------------------------------------------------- */
+  /* Printer's black, warm — R > G > B, never a neutral #222. */
+  --ink: #1e1b17;
+  /* The second spot ink. Rubine, bodied like ink on uncoated stock. Lifted
+     from the spec's #a8323c so it clears 3:1 against --ink in greyscale
+     while the knocked-out letter still clears 4.5:1 against it. */
+  --ink-red: #b83843;
+  /* A discarded letter, and every piece of secondary text. Darkened hard from
+     the spec's #9a9288, which was a pretty 2.4:1 and therefore unreadable.
+     The floor it has to clear is 4.5:1 on the DARKEST paper surface it can
+     land on (--paper-recess), not just on --paper. */
+  --ghost: #645d53;
+  /* Hairline rules, in the sense a dictionary page uses them. */
+  --rule: #c6bcac;
+
+  /* --- the press ---------------------------------------------------- */
+  /* Shadow and highlight as channels, so alpha can vary per layer. The
+     shadow is a warm brown-black, not rgba(0,0,0,.1). */
+  --shadow-rgb: 58 48 36;
+  --highlight-rgb: 255 253 247;
+  /*
+   * The end-of-match reveal's backdrop (.cortina in index.css) — "the room
+   * going dark around it" — needs its own alpha, not --shadow-rgb's shared
+   * one: light mode's paper (#e9e4da) is bright enough that the same 0.5
+   * this project used before Task 21's review read as a light wash, with
+   * the board's own tile colours still legible straight through it. Dark
+   * mode's paper (#1a1815) is already near-black, so the same problem does
+   * not exist there — its own override below stays closer to that original
+   * value, just enough to add depth rather than to fix a legibility bug.
+   */
+  --scrim-alpha: 0.72;
+  /* How far a block stands off the sheet, and how far it travels when
+     pressed. One number, so the whole shop moves together. */
+  --press-depth: 3px;
+
+  /* --- edges -------------------------------------------------------- */
+  /* Not one radius on everything. A type block is milled metal, so its
+     corners are all but square; a key is moulded and slightly softer; a
+     sheet of paper is cut. */
+  --radius-tile: 2px;
+  --radius-key: 4px;
+  --radius-sheet: 2px;
+
+  /* --- motion ------------------------------------------------------- */
+  /* Revealing is pressing: the block travels down and comes back carrying
+     ink. Colour is applied by class, never by the animation, so a dropped
+     frame or a disabled animation can never lose a hint. */
+  --press-duration: 140ms;
+  --reveal-duration: 320ms;
+  /* The rejected-guess row shake. Its own token, not reveal-duration reused,
+     because the two never run together (a rejection never reveals) and a
+     future tuning of one must not silently retune the other. */
+  --shake-duration: 300ms;
+  --press-ease: cubic-bezier(0.2, 0.9, 0.25, 1);
+
+  /* --- type --------------------------------------------------------- */
+  --font-serif: 'Newsreader', ui-serif, Georgia, 'Times New Roman', serif;
+  --text-display: clamp(2.75rem, 9vw, 4rem);
+  --text-headword: clamp(1.75rem, 5.5vw, 2.375rem);
+  --text-tile: clamp(1.375rem, 6vw, 1.875rem);
+  --text-lead: 1.25rem;
+  --text-body: 1.0625rem;
+  --text-small: 0.875rem;
+  --text-micro: 0.75rem;
+}
+
+/*
+ * Dark — the press bed. Same three-way value split, inverted: the fully
+ * inked block is now the brightest thing on the page, because what you are
+ * looking at is polished type catching the lamp, and the un-inked sheet has
+ * become the dark bed underneath.
+ *
+ * --ink-red is deliberately less saturated here than a straight hue-rotate
+ * of the light value would give (48% vs 64%), because the old, fully
+ * saturated #d84d57 was competing with the cream --ink block for "heaviest
+ * thing on the tile" instead of ranking under it. That is NOT because the
+ * contrast floors left no room to darken at the original hue/saturation —
+ * they did: at 355.7°/64%, --ink-red can move anywhere from about #d84b55
+ * to #da5861 (an ~0.032 window in relative luminance, roughly ten grey
+ * levels) and still clear both --knockout-on-ink-red >= 4.5:1 and
+ * --ink-red-vs-ink >= 3:1 with real margin. Rendering that darkened-but-
+ * still-saturated family in the actual tiles is what ruled it out: it still
+ * read as vivid as the original next to the cream block (a saturated red
+ * picks up a Helmholtz–Kohlrausch boost — it reads brighter than its
+ * luminance says), so the "heaviest thing" competition survived the darken.
+ * Desaturating toward #c76066 is what actually fixed the rank the eye sees,
+ * and it happens to buy the contrast floors *more* headroom too, not less
+ * (see the task-15 report for the before/after table and the render
+ * comparison). If you revisit this colour, the thing to re-test is the
+ * perceptual rank in real tiles, not the contrast maths — the maths was
+ * never the constraint.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --paper: #1a1815;
+    --paper-raised: #232019;
+    --paper-recess: #131210;
+    --knockout: #131210;
+
+    --ink: #ede7da;
+    --ink-red: #c76066;
+    --ghost: #8f8779;
+    --rule: #38332c;
+
+    --shadow-rgb: 0 0 0;
+    --highlight-rgb: 120 110 94;
+    /* Dark's paper is already near-black; a lower alpha here still reads
+       as a real backdrop instead of just adding depth on top of depth. */
+    --scrim-alpha: 0.6;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --paper: #1a1815;
+  --paper-raised: #232019;
+  --paper-recess: #131210;
+  --knockout: #131210;
+
+  --ink: #ede7da;
+  --ink-red: #c76066;
+  --ghost: #8f8779;
+  --rule: #38332c;
+
+  --shadow-rgb: 0 0 0;
+  --highlight-rgb: 120 110 94;
+  --scrim-alpha: 0.6;
+}
+
+/*
+ * Reduced motion drops the press to an instant state change rather than a
+ * fast one. The durations are tokens precisely so this override is a single
+ * place, and so no component can hard-code its way around it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --press-duration: 0ms;
+    --reveal-duration: 0ms;
+    --shake-duration: 0ms;
+  }
+}

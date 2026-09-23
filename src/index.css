@@ -1,0 +1,554 @@
+@import './styles/tokens.css';
+
+/*
+ * Self-hosted Newsreader (Task 24) — see NOTICE.md and data/SOURCES.md for
+ * provenance/licence, and this task's report for how these two files were
+ * produced. Previously loaded from Google Fonts; moved same-origin so it
+ * enters the service worker's REVISIONED PRECACHE (public/fonts/*.woff2,
+ * see vite.config.ts's globPatterns) instead of a cross-origin runtime
+ * cache. That is not a cosmetic difference: a precached asset is fetched
+ * during the service worker's own install step, before it ever activates —
+ * so by the time a page confirms the worker is active (this app's own
+ * `pwa-offline.spec.ts` waits on exactly that), the font is GUARANTEED
+ * already cached, on the very first visit, with no second load required.
+ * The old Google-Fonts runtime-caching route could not make that guarantee
+ * (see this task's report for the measured gap that found).
+ *
+ * Two files, not four: `Newsreader-Roman.woff2` keeps the variable `opsz`
+ * axis intact (6–72) — the browser-driven optical-size axis is the entire
+ * reason a variable serif was chosen (see body's own comment below on
+ * `font-optical-sizing`) — but `wght` is instanced to 350–650, a measured
+ * range: grepping every font-weight declaration reachable in the shipped
+ * app (src/ui, src/index.css, excluding src/dev/Showcase.tsx, which never
+ * ships) turned up exactly two weights ever used, 400 (body default) and
+ * 600 (`font-semibold` / `.tecla`/`.celula`'s own `font-weight: 600`), so
+ * 350–650 is one weight-step of headroom past each measured bound, not the
+ * wider 300–700 Google's stylesheet happened to request.
+ * `Newsreader-Italic.woff2` is a fully STATIC instance (no `fvar`/`gvar` at
+ * all) pinned to weight 400 and `opsz` 18 (the axis's own default): every
+ * italic use in the shipped app (Header.tsx's "s.m.", ModeTabs.tsx's puzzle
+ * number, ResultModal.tsx's part-of-speech tag and footer links,
+ * HistoryModal.tsx's gloss) renders at the default weight, at
+ * text-micro/text-small/text-body (12–17px) — never at a display size —
+ * so a second full variable face would have paid for flexibility nothing
+ * in this app exercises. That is most of where the size saving came from:
+ * 95,940 bytes as a variable face down to 13,888 bytes static.
+ *
+ * `font-display: swap`: chosen over `optional` specifically because these
+ * files are precached — the only moment `swap`'s brief
+ * invisible-then-visible-if-slow behaviour can matter at all is the very
+ * first-ever page load, before the service worker exists to have cached
+ * anything, and even then it's a same-origin same-network fetch, not a
+ * third-party CDN round trip. `optional` would let the browser give up on
+ * the branded typeface entirely for that one page view if it didn't win a
+ * ~100ms race — silently keeping the fallback serif even after the file
+ * finished downloading in the background — which is the wrong trade for a
+ * product whose whole visual argument (tokens.css's own doc comment) rests
+ * on this specific typeface, not on avoiding a fractional-second reflow on
+ * the rarest possible page view.
+ */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 350 650;
+  font-display: swap;
+  src: url('/fonts/Newsreader-Roman.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Newsreader-Italic.woff2') format('woff2');
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * Both html and body carry the paper colour. html matters because the
+   * browser paints the canvas from it before any element exists — that, plus
+   * the pre-paint script in index.html, is what stops a dark-mode player
+   * getting a white flash at 23:00.
+   */
+  html {
+    background-color: var(--paper);
+  }
+
+  body {
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: var(--text-body);
+    /* Newsreader carries an optical-size axis; letting the browser drive it
+       is the whole reason for choosing a variable serif here. */
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /*
+   * The page-wide focus treatment: ink on paper, a 2px rule held off the
+   * element by a 2px gap. Because the ring lands outside the element it is
+   * always drawn on the sheet, so it survives on a fully inked black block
+   * and on a red one without needing a second colour.
+   *
+   * `.tecla` overrides this below (Task 25 fix round 2) with an INSET ring
+   * instead — see that rule's own doc comment for why: every `.tecla` this
+   * app has can sit inside a horizontally-scrolling row (Keyboard.tsx), and
+   * a ring drawn OUTSIDE the element has nowhere to go once that row's own
+   * box is exactly as tall as the keys inside it — clipped by the row's own
+   * `overflow-x-auto` (which makes `overflow-y` compute to `auto` too, a
+   * real CSS interop rule, not a bug of this app's own making). Padding
+   * that row to make room for an outset ring was tried first (fix round 1)
+   * and reverted: it cost 36px of keyboard height, measured to push Solo's
+   * own sixth row off screen at 360x800 and 375x812. An inset ring needs no
+   * room outside the box at all, so it costs nothing there.
+   */
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--ink-red);
+    color: var(--knockout);
+  }
+}
+
+@layer components {
+  /*
+   * A `sorte`: the block of metal type carrying one letter. The state
+   * classes below apply colour directly — never through an animation — so a
+   * hint can never be lost to a dropped frame or to reduced motion.
+   */
+  .sorte {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border-radius: var(--radius-tile);
+    font-size: var(--text-tile);
+    font-weight: 600;
+    /* Hold the optical size down at display sizes: Newsreader's small-text
+       masters have the thicker hairlines and shorter extenders that a metal
+       face cut for this size would have. At `auto` a 30px letter gets the
+       display master and goes spindly, which is exactly the look this is
+       trying not to be. */
+    font-variation-settings: 'opsz' 14;
+    line-height: 1;
+    user-select: none;
+    transition:
+      transform var(--press-duration) var(--press-ease),
+      box-shadow var(--press-duration) var(--press-ease);
+  }
+
+  /* Empty house: pressed, never filled. */
+  .sorte-vazia {
+    background-color: var(--paper-recess);
+    color: transparent;
+    box-shadow: theme('boxShadow.press-in');
+  }
+
+  /*
+   * Set but not yet pressed: a letter has been typed into the active row but
+   * not submitted. Built like .sorte-vazia and .sorte-ausente (background +
+   * text colour + one box-shadow, nothing else) but with the other two
+   * dials turned the opposite way from .sorte-vazia: the letter is already
+   * inked (--ink, not transparent) because it is legible type, not an empty
+   * house, and the block stands proud (press-out, not press-in) because it
+   * has not been struck yet — only submission presses it down.
+   */
+  .sorte-preenchida {
+    background-color: var(--paper);
+    color: var(--ink);
+    box-shadow: theme('boxShadow.press-out');
+  }
+
+  /* Pressed, no ink took: the blind deboss. */
+  .sorte-ausente {
+    background-color: var(--paper);
+    color: var(--ghost);
+    box-shadow: theme('boxShadow.press-in');
+  }
+
+  /* Inked in the spot red — the letter is in the word, elsewhere. */
+  .sorte-presente {
+    background-color: var(--ink-red);
+    color: var(--knockout);
+    box-shadow: theme('boxShadow.press-out');
+  }
+
+  /* Inked solid — right letter, right house. */
+  .sorte-certa {
+    background-color: var(--ink);
+    color: var(--knockout);
+    box-shadow: theme('boxShadow.press-out');
+  }
+
+  /* A key with real travel. */
+  .tecla {
+    display: grid;
+    place-items: center;
+    min-width: 2rem;
+    padding: 0.7rem 0.5rem;
+    border-radius: var(--radius-key);
+    background-color: var(--paper-raised);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: var(--text-small);
+    font-weight: 600;
+    line-height: 1;
+    box-shadow: theme('boxShadow.press-out');
+    transition:
+      transform var(--press-duration) var(--press-ease),
+      box-shadow var(--press-duration) var(--press-ease);
+  }
+
+  .tecla:active {
+    transform: translateY(var(--press-depth));
+    box-shadow: theme('boxShadow.press-flat');
+  }
+
+  /*
+   * Task 25 fix round 2: `.tecla`'s own focus ring is INSET, not the
+   * page-wide outset default (`:focus-visible` above) — see that rule's own
+   * doc comment for why. `outline-offset: -2px` draws the same 2px ink rule
+   * just inside the key's own edge instead of outside it, so it needs no
+   * extra room in the scrolling keyboard row that holds most `.tecla`
+   * elements. `outline` specifically, not `box-shadow`: outline is defined
+   * to paint on top of an element's own descendants regardless of stacking
+   * order, which is exactly what a segmented key's coloured bands
+   * (`.tecla-multipla-fundo`, below — absolutely-positioned children) would
+   * otherwise sit on top of and hide an inset `box-shadow` entirely.
+   *
+   * Plain ink only clears 3:1 (this app's own UI-component floor, not the
+   * 4.5:1 text floor) against `--ink-red`, and effectively none at all
+   * against `--ink` itself — both real backgrounds a scored `.tecla` can
+   * have. The override just below switches to `--knockout` for exactly
+   * those two states, the same (background, ink) pairing this file already
+   * proved out for their own letters.
+   */
+  .tecla:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+
+  .tecla-presente:focus-visible,
+  .tecla-certa:focus-visible {
+    outline-color: var(--knockout);
+  }
+
+  .tecla-ausente {
+    background-color: var(--paper);
+    color: var(--ghost);
+    box-shadow: theme('boxShadow.press-in');
+  }
+
+  .tecla-ausente:active {
+    transform: none;
+  }
+
+  .tecla-presente {
+    background-color: var(--ink-red);
+    color: var(--knockout);
+  }
+
+  .tecla-certa {
+    background-color: var(--ink);
+    color: var(--knockout);
+  }
+
+  /*
+   * The scroll affordance for a keyboard row wider than the viewport (320px
+   * phones, and every width in Dueto/Quarteto). `data-edges` is measured in
+   * Keyboard.tsx's KeyboardRow — see its doc comment for why this is not a
+   * permanent fade — and names the side that has content scrolled out of
+   * view. The mask fades the row's own paint towards transparent over the
+   * last 28px, which reads as "this continues" against the sheet without
+   * adding a scrollbar, a shadow or a control.
+   *
+   * `mask-image` rather than a gradient background: the keys are opaque and
+   * fill the row's full height, so anything painted BEHIND them is invisible
+   * at exactly the edge where the cue is needed. A mask clips the element's
+   * painted result, children included. Autoprefixer adds the -webkit- form.
+   */
+  .fila-teclado[data-edges='start'] {
+    mask-image: linear-gradient(to right, transparent 0, #000 28px);
+  }
+
+  .fila-teclado[data-edges='end'] {
+    mask-image: linear-gradient(to left, transparent 0, #000 28px);
+  }
+
+  .fila-teclado[data-edges='both'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 28px,
+      #000 calc(100% - 28px),
+      transparent 100%
+    );
+  }
+
+  /*
+   * Segmented (multi-board) key: Dueto/Quarteto need one letter to show
+   * several independent results at once. The outer .tecla button keeps its
+   * own background, shadow, press travel and touch target unchanged; only
+   * the fill splits into bands, and the letter sits on top of them.
+   */
+  .tecla-multipla {
+    position: relative;
+    overflow: hidden;
+  }
+
+  /*
+   * Task 25 fix round 2: a segmented key's own outer box is never actually
+   * painted in any of `.tecla-presente`/`.tecla-certa`'s colours — those
+   * classes are never applied to a segmented button, only to the CHILD
+   * bands below — so no single fixed outline colour on `.tecla:focus-visible`
+   * above can be guaranteed to contrast against whichever bands happen to
+   * sit under the ring at a given moment. `::after` here draws two
+   * concentric inset rings at once — ink, then knockout, 2px further in —
+   * via `box-shadow`, which (unlike `outline`) supports more than one
+   * layer, on a dedicated pseudo-element stacked ABOVE the bands
+   * (`z-index: 2`, higher than `.tecla-multipla-letra`'s own `1`), so at
+   * least one of the two always clears 3:1 against any band colour this
+   * app has: ink against a light (`--paper`/unused) band, knockout against
+   * a dark one (`--ink`/`--ink-red`). The native outline is switched off
+   * here specifically so it does not also draw a redundant, single-colour
+   * ring underneath — one that would otherwise `outline`'s own
+   * paint-on-top behaviour, the same property this whole rule relies on.
+   */
+  .tecla-multipla:focus-visible {
+    outline: none;
+  }
+
+  .tecla-multipla:focus-visible::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    border-radius: inherit;
+    box-shadow:
+      inset 0 0 0 2px var(--ink),
+      inset 0 0 0 4px var(--knockout);
+  }
+
+  .tecla-multipla-fundo {
+    position: absolute;
+    inset: 0;
+    display: flex;
+  }
+
+  .tecla-segmento {
+    flex: 1 1 0%;
+  }
+
+  /*
+   * The blind deboss, not just the paper tone. Its single-board sibling
+   * `.tecla-ausente` above sets `background-color` AND `press-in`, and the
+   * deboss is what makes the third state a state at all: this design
+   * language separates the three by VALUE as well as hue, which is what
+   * buys colour accessibility without a second palette.
+   *
+   * Without it, a key absent on every board rendered as bare page paper
+   * with a faint --ghost letter and no silhouette whatsoever — invisible,
+   * and still a clickable 44x44 target. The band has to carry it rather
+   * than the button: `.tecla-multipla-fundo` is `position: absolute;
+   * inset: 0`, so it paints over the button's own `--paper-raised` fill and
+   * over both inset layers of its `press-out`. Whatever the band does not
+   * draw itself is not drawn. `.tecla-segmento-presente` and
+   * `.tecla-segmento-certa` need no equivalent: --ink-red and --ink are
+   * their own silhouette against the sheet.
+   */
+  .tecla-segmento-ausente {
+    background-color: var(--paper);
+    box-shadow: theme('boxShadow.press-in');
+  }
+
+  .tecla-segmento-presente {
+    background-color: var(--ink-red);
+  }
+
+  .tecla-segmento-certa {
+    background-color: var(--ink);
+  }
+
+  /*
+   * The letter is painted once, but each band underneath it gets its own
+   * fixed, already-proven ink colour rather than one colour trying to read
+   * over all of them: the component sets `background-image` to a hard-stop
+   * gradient (see `segmentedTextGradient` in Key.tsx) that repeats each
+   * band's own `.tecla-*` text colour under its own slice of the letter,
+   * then this class clips that gradient to the glyph instead of painting
+   * the box behind it.
+   *
+   * A `mix-blend-mode: difference` source was tried first and dropped: a
+   * single colour differenced against several different backgrounds is a
+   * coincidence of the current theme's token magnitudes, not a guarantee
+   * — it measured under 1.3:1 against every scored band in dark mode. See
+   * the task-17 fix report for the numbers.
+   *
+   * `background-clip: text` scales the gradient to THIS ELEMENT's own box
+   * — not the button's, not the bands'. This element must therefore be
+   * sized to exactly the same box `.tecla-multipla-fundo` occupies
+   * (`position: absolute; inset: 0`, the full button interior), or the
+   * gradient's 0–100% coordinate space silently stops matching the bands'
+   * 0–100% coordinate space. A first version of this rule instead let the
+   * span shrink-wrap the glyph and centred it via the button's own
+   * `place-items: center` — the gradient then painted across an ~11px
+   * glyph box inside a 44px button, so its quarters lined up with the
+   * bands only by coincidence, and did not for boardCount 4 (measured:
+   * the quarter meant for band 0 landed over band 1's real background at
+   * ≈1.0:1). Matching this box to `.tecla-multipla-fundo`'s box exactly
+   * is what makes the two coordinate spaces the same one, for any glyph
+   * width and any board count — see the task-17 fix report for the
+   * rendered measurements.
+   */
+  .tecla-multipla-letra {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    color: transparent;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /*
+   * A rejected guess: the active row shakes once. Plays on mount only —
+   * the caller (Board.tsx, driven by MatchProvider's shakeToken) forces a
+   * fresh DOM node for the active row each time a guess is rejected, via
+   * its React key, so this animation restarts even for two identical
+   * rejections in a row, and never plays for anything else (ordinary
+   * typing never remounts the row).
+   */
+  @keyframes tremor {
+    10%,
+    90% {
+      transform: translateX(-1px);
+    }
+    20%,
+    80% {
+      transform: translateX(2px);
+    }
+    30%,
+    50%,
+    70% {
+      transform: translateX(-4px);
+    }
+    40%,
+    60% {
+      transform: translateX(4px);
+    }
+  }
+
+  .tremor {
+    animation: tremor var(--shake-duration) var(--press-ease);
+  }
+
+  /*
+   * A slip of paper announcing a rejected guess. Same shelf-and-shadow
+   * language as a raised key (.tecla), not a new elevation idiom.
+   */
+  .aviso {
+    background-color: var(--paper-raised);
+    color: var(--ink);
+    border-radius: var(--radius-sheet);
+    padding: 0.6rem 1rem;
+    font-family: var(--font-serif);
+    font-size: var(--text-small);
+    text-align: center;
+    box-shadow: theme('boxShadow.press-out');
+  }
+
+  /*
+   * The end-of-match reveal (ResultModal): a printed page laid over the
+   * press, not a floating SaaS dialog. `.cortina` is the room going dark
+   * around it — the shadow channel token, not a flat black overlay, so it
+   * stays warm in both themes the same way every other shadow in this file
+   * does. Its alpha is its own token (`--scrim-alpha`, tokens.css), not
+   * `.aviso`/other shadows' shared 0.5: a scrim exists to dim what's behind
+   * it, and light mode's bright paper needs noticeably more of that than
+   * dark mode's already-near-black paper does to actually read as "the
+   * room going dark" rather than a faint wash the board still shows
+   * through — see tokens.css's own comment on `--scrim-alpha` for the
+   * measured before/after.
+   *
+   * `.folha` is the sheet itself — same shelf-and-shadow language as
+   * `.aviso`/`.tecla`, but deliberately NOT sized or weighted like either
+   * of them: this is the one moment the game hands the player an actual
+   * dictionary entry, the payoff every other screen has been pointed at,
+   * and it needs to read as an event, not as a bigger toast. Generous
+   * padding gives it presence independent of how short the shown
+   * definition happens to be; the hairline rule below its title (see the
+   * `.folha-regua` div ResultModal.tsx renders) is the same masthead-over-
+   * body separation a printed dictionary page uses, not a decoration
+   * borrowed from a component that has nothing to do with the metaphor.
+   */
+  .cortina {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background-color: rgb(var(--shadow-rgb) / var(--scrim-alpha));
+  }
+
+  .folha {
+    width: 100%;
+    max-width: 28rem;
+    max-height: min(85vh, 40rem);
+    overflow-y: auto;
+    background-color: var(--paper-raised);
+    color: var(--ink);
+    border-radius: var(--radius-sheet);
+    padding: 2.25rem 2rem;
+    box-shadow: theme('boxShadow.press-out');
+  }
+
+  .folha-regua {
+    margin-top: 1.25rem;
+    margin-bottom: 1.5rem;
+    border-top: 1px solid var(--rule);
+  }
+
+  /*
+   * Quarteto's 2x2 grid (see BoardGrid.tsx): four boards of nine rows have
+   * to fit inside 100svh even on an iPhone SE, side by side two at a time —
+   * a genuine width squeeze the single-board --text-tile clamp (tuned for
+   * one board spanning the whole content width) was never sized for.
+   * Scoped to just this subtree, the same "override a token on an
+   * ancestor" trick tokens.css already uses at :root for light/dark, just
+   * one level down instead of the whole page — Row.tsx and Tile.tsx never
+   * know this class exists, they only ever read var(--text-tile).
+   */
+  .grade-compacta {
+    --text-tile: clamp(0.8125rem, 4vw, 1.25rem);
+  }
+}
+
+/*
+ * Reduced motion: the press becomes an instant state change. The duration
+ * tokens already collapse to 0ms in tokens.css; this catches anything that
+ * reached for a literal duration instead of the token.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

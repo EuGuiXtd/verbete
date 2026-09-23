@@ -1,0 +1,44 @@
+<!doctype html>
+<!--
+  Dev-only specimen sheet: `pnpm dev` then open /showcase.html. It is not an
+  input to `vite build`, so it never ships. Kept at the repo root because
+  that is where Vite resolves multi-page entries from.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#e9e4da" />
+    <title>Verbete — espécimen</title>
+
+    <script>
+      (function () {
+        var PAPER = { light: '#e9e4da', dark: '#1a1815' };
+        var choice = 'system';
+        try {
+          var raw = window.localStorage.getItem('verbete:prefs');
+          var stored = raw ? JSON.parse(raw).data.theme : null;
+          if (stored === 'light' || stored === 'dark' || stored === 'system') {
+            choice = stored;
+          }
+        } catch (error) {
+          /* No storage, or nonsense in it. The media query governs. */
+        }
+        if (choice !== 'system') {
+          document.documentElement.setAttribute('data-theme', choice);
+        }
+        var prefersDark =
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var resolved = choice === 'system' ? (prefersDark ? 'dark' : 'light') : choice;
+        document.documentElement.style.backgroundColor = PAPER[resolved];
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', PAPER[resolved]);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/dev/mount.tsx"></script>
+  </body>
+</html>

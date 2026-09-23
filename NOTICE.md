@@ -1,0 +1,125 @@
+# NOTICE
+
+This file records third-party attributions for data distributed with this project. It covers
+data only — the intent is for the game code (React/CSS/engine) to remain under whatever licence
+the project owner selects, kept separate from the notices below, which apply only to the
+generated word-list and definition files named in each block. See `data/SOURCES.md` for full
+provenance, including sources that are *not* redistributed and so carry no obligation here.
+
+## VERO Brazilian Portuguese dictionary — word lists
+
+The word lists shipped with this game (valid guesses and candidate answers) are derived from the
+VERO Hunspell dictionary and affix file for Brazilian Portuguese (`pt_BR.dic`, `pt_BR.aff`),
+by Raimundo Santos Moura and the LibreOffice pt-BR community
+(`https://github.com/LibreOffice/dictionaries`, `pt_BR/` directory).
+
+**Adaptation made:** the affix rules were expanded against the dictionary's word stems, the
+result was filtered to five-letter forms only, and a subset of those was selected as candidate
+answers using frequency-based ranking (hermitdave/FrequencyWords, build-time only and never
+redistributed, so it owes no notice here — see `data/SOURCES.md`) and restricted to
+words confirmed as genuine dictionary head-forms by the Portuguese Wiktionary (Wikcionário; see
+the Wikcionário notice below — used here only to decide list membership, at build time, not
+redistributed as part of this word list; no Wiktionary text is embedded in it). What ships is a
+derived word list, not the original dictionary files.
+
+**Licence:** upstream states its own data is licensed under "the GNU Lesser General Public
+License version 3 (LGPLv3) ... and the Mozilla Public License", without naming an MPL version.
+Downstream packagers who redistribute the same data disagree on how to read this (see
+`data/SOURCES.md` for the full four-way comparison: Debian reads LGPL-2.1+ only; wooorm reads
+LGPL-3.0 OR MPL-2.0; Fedora reads (LGPL-3.0-only OR MPL-1.1) for the dictionary component).
+Rather than assert a reading upstream itself never wrote down, this project distributes the
+derived word lists under **LGPL-3.0** — the grant common to all four readings — and additionally
+under the **Mozilla Public License**, to whatever extent upstream's unversioned MPL grant
+permits. No specific MPL version is asserted.
+
+**The obligation this grant carries, and how it is discharged.** LGPLv3 section 4 — via GPLv3
+section 4, which it incorporates — requires a copy of the licence to be *conveyed with* the work,
+not merely referenced. A `NOTICE.md` in a repository is not conveyed to anyone playing the game,
+so the full texts ship as files:
+
+- `public/licenses/LGPL-3.0.txt` → served at `/licenses/LGPL-3.0.txt`
+- `public/licenses/GPL-3.0.txt` → served at `/licenses/GPL-3.0.txt` (LGPLv3 is written as a set of
+  additional permissions on top of GPLv3 and is unreadable without it, so both are required)
+
+Both are linked from the in-app "Sobre as palavras e definições" screen
+(`src/ui/modals/AboutModal.tsx`), which is reachable from the header's `?` button, and both are in
+the service worker's precache (`vite.config.ts`'s `globPatterns` includes `txt`) so the installed,
+offline copy carries them too. The same applies to `public/fonts/OFL.txt` — see the OFL block
+below.
+
+## Wikcionário (Portuguese Wiktionary) — word definitions
+
+Added by Task 21. `src/data/definitions.generated.json` (produced by `pnpm dict:build` from
+`scripts/build-dictionary.ts`, sourced from `data/raw/ptwiktionary.jsonl.gz`) contains a short
+definition for every one of this game's 1,554 answers. A word with no usable, non-spoiling gloss
+(see "Adaptation made" below) is absent from this file — and, since the reveal is the point of
+the game, it is dropped from the answer list too, staying a valid guess only. `pnpm dict:verify`
+enforces that one-to-one correspondence on every push.
+
+The file name differs from what this block originally announced (`data/definicoes.json`): it
+ships under `src/data/` instead, as a plain JSON module the game loads via a dynamic `import()`
+(see `src/data/definitions.ts`) rather than a top-level data file, so its ~35 KB (gzip) payload
+stays out of the initial bundle. Nothing about the licence obligation below changes with the
+path.
+
+**Adaptation made:** for each answer, the first Wiktionary sense (in entry order) whose gloss is
+non-empty and does not itself contain the answer's own stem is selected — a check that matters in
+practice: Wiktionary's own first sense for "casar" is "ato de unir por casamento...", which
+contains "casa" and would spoil the game's own reward, so that entry falls through to its second
+sense instead (see `scripts/build-dictionary.ts`'s `assertDefinitionDoesNotSpoil` and
+`buildDefinition`). Where *no* sense of a word avoids its own stem — which is the ordinary case
+for a common headword, since a dictionary gloss naturally restates the word it defines — the
+first usable sense is kept with the offending words **redacted**, each replaced by an em dash
+the way a printed dictionary marks its own headword inside an entry ("saber" ships as
+"conhecimento; aquilo que se —"). The selected gloss is whitespace-normalized and truncated to
+roughly 90 characters on a word boundary, and prefixed with a part-of-speech abbreviation
+("s.f.", "adj.", "v.", ...) derived from the same Wiktionary entry. This is a single sense
+selected out of however many the real entry has, shortened and sometimes partly redacted to fit
+a result screen without spoiling it — an adaptation, not a reproduction of the entry.
+
+**Licence:** Wiktionary content is licensed under **CC BY-SA 4.0**
+(<https://creativecommons.org/licenses/by-sa/4.0/>).
+`src/data/definitions.generated.json` is a derivative work of Wikcionário content and is
+distributed under the same licence. Attribution is given in the product itself, not only in this
+file: the result screen that shows each definition links directly to
+`https://pt.wiktionary.org/wiki/<word>` — the specific article the text was adapted from, per
+word — which per CC BY-SA 4.0's own recommended practice is the most robust way to credit the
+original authors and to indicate that the material was adapted.
+
+## Newsreader typeface
+
+Added by Task 24. `public/fonts/Newsreader-Roman.woff2` and `public/fonts/Newsreader-Italic.woff2`
+(loaded via the `@font-face` rules in `src/index.css`) are subsetted, axis-instanced derivatives
+of the Newsreader variable font — previously loaded at runtime from Google Fonts, self-hosted
+starting with this task so it enters the service worker's revisioned precache instead of a
+cross-origin runtime cache (see `data/SOURCES.md` for the download URLs and date, and this task's
+report for the measured offline gap that motivated the change).
+
+**Adaptation made:** each file was subsetted to the characters this game's shipped UI and
+generated data actually render (see `data/SOURCES.md` for the exact character-set derivation),
+and the `wght`/`opsz` variable axes were reduced from the source's full ranges to what this
+project's own CSS was measured to use — `Newsreader-Roman.woff2` keeps `opsz` fully variable
+(6–72) with `wght` instanced to 350–650; `Newsreader-Italic.woff2` is instanced to a single
+static weight/optical-size pair (400, 18). Neither file is renamed, and neither claims to be the
+original, unmodified Newsreader distribution — see the licence note below on Reserved Font
+Names.
+
+**Licence:** **SIL Open Font License, Version 1.1**, read directly from the `OFL.txt` shipped
+with the same `google/fonts` distribution this project downloaded from (kept unmodified at
+`public/fonts/OFL.txt`), not asserted from memory. Its copyright line, quoted verbatim:
+
+> Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+
+The OFL's five numbered conditions, and how this project's use maps to each: (1) the font is not
+sold by itself — it ships bundled with this game's code, not distributed on its own; (2) every
+redistributed copy carries the copyright notice and licence — satisfied by `public/fonts/OFL.txt`
+shipping as its own file alongside the two font files it covers, linked from the in-app "Sobre as
+palavras e definições" screen, and precached by the service worker (`vite.config.ts`'s
+`globPatterns` includes `txt`) so the offline copy is not a copy of the fonts without their
+licence, which is the one distribution mode where this condition most literally fails; (3) no Reserved Font Name is
+used by a modified version without permission — this project does not rename the typeface or
+present the subsetted files as anything other than a derivative of Newsreader; (4) the Copyright
+Holder's name is not used to promote this project — it appears only in this attribution notice;
+(5) the modified font remains under the same OFL licence, which this notice itself satisfies by
+not asserting any other licence for the font files. No condition in `public/fonts/OFL.txt`
+prohibits subsetting or axis instancing.
