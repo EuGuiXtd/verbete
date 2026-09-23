@@ -7,7 +7,8 @@ import { AboutModal } from '../modals/AboutModal';
 import { HelpModal } from '../modals/HelpModal';
 import { HistoryModal } from '../modals/HistoryModal';
 import { StatsModal } from '../modals/StatsModal';
-import type { MouseEvent } from 'react';
+import { EstatisticasIcon, LuaIcon, SistemaIcon, SolIcon } from './icons';
+import type { MouseEvent, ReactNode } from 'react';
 
 const NEXT_THEME: Record<ThemeChoice, ThemeChoice> = {
   system: 'light',
@@ -22,6 +23,32 @@ const THEME_LABEL: Record<ThemeChoice, string> = {
 };
 
 /**
+ * Feedback round 1, item 1: the theme control "não ficou explícito". It used
+ * to be one lowercase word — "sistema", "claro", "escuro" — sitting in a row
+ * of chrome buttons: that states the current value, but never says the thing
+ * is a switch, or a switch of WHAT. The word stays (it is the only part that
+ * can report the third, non-obvious `system` state) and gains the pictogram
+ * that names the subject, so the control reads as sun-plus-"claro" rather
+ * than as a stray word. An icon rather than a second line of text because
+ * this header has to survive 320px alongside the wordmark.
+ */
+const THEME_ICON: Record<ThemeChoice, ReactNode> = {
+  system: <SistemaIcon />,
+  light: <SolIcon />,
+  dark: <LuaIcon />,
+};
+
+/**
+ * What pressing it will DO, not only what it currently is. A label that
+ * reports the current value alone leaves a screen-reader user to guess the
+ * effect, and this control cycles three values rather than toggling two, so
+ * "alternar" on its own does not say where it lands either.
+ */
+function themeAriaLabel(theme: ThemeChoice): string {
+  return `Tema: ${THEME_LABEL[theme]}. Trocar para ${THEME_LABEL[NEXT_THEME[theme]]}`;
+}
+
+/**
  * The wordmark, set as a dictionary sets its own headword: lowercase serif,
  * syllable-dotted, followed by the part-of-speech abbreviation the way
  * src/dev/Showcase.tsx already established for "verbete" itself.
@@ -29,13 +56,24 @@ const THEME_LABEL: Record<ThemeChoice, string> = {
 function Wordmark() {
   return (
     <h1 className="flex items-baseline gap-2">
+      {/*
+        Feedback round 1, item 1 (the theme control): the wordmark and the
+        part-of-speech tag together claimed more than half of a 320px header,
+        which is why the theme button had to be a bare word to fit at all and
+        still ran off the right edge. Both give ground below `sm:` — the
+        wordmark by one step, the "s.m." entirely — and at `sm:` up both are
+        exactly what they were. `text-[1.375rem]` rather than a smaller
+        `--text-headword` floor: that token is also the size of StatsModal's
+        four big numbers, which have no such squeeze and should not shrink
+        with this one.
+      */}
       <span
-        className="text-headword font-semibold tracking-[-0.015em]"
+        className="text-[1.375rem] font-semibold tracking-[-0.015em] sm:text-headword"
         style={{ fontVariationSettings: "'opsz' 32" }}
       >
         ver&middot;be&middot;te
       </span>
-      <span className="text-small italic text-ghost">s.m.</span>
+      <span className="hidden text-small italic text-ghost sm:inline">s.m.</span>
     </h1>
   );
 }
@@ -73,13 +111,14 @@ export function Header() {
   const [openModal, setOpenModal] = useState<OpenModal>(null);
 
   return (
-    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-6">
+    <header className="flex shrink-0 items-center justify-between gap-2 border-b border-rule px-3 py-3 sm:gap-3 sm:px-6">
       <Wordmark />
       <div className="flex items-center gap-1">
         <button
           type="button"
-          className="tecla px-3"
+          className="tecla px-2.5 sm:px-3"
           aria-label="Como jogar"
+          title="Como jogar"
           onClick={(event: MouseEvent<HTMLButtonElement>) => {
             blurOnMouseActivation(event);
             setOpenModal('help');
@@ -89,25 +128,32 @@ export function Header() {
         </button>
         <button
           type="button"
-          className="tecla px-3"
+          className="tecla px-2.5 sm:px-3"
           aria-label="Estatísticas"
+          title="Estatísticas"
           onClick={(event: MouseEvent<HTMLButtonElement>) => {
             blurOnMouseActivation(event);
             setOpenModal('stats');
           }}
         >
-          #
+          <EstatisticasIcon />
         </button>
         <button
           type="button"
-          className="tecla px-3"
-          aria-label={`Tema: ${THEME_LABEL[theme]} — alternar`}
+          // `flex` (not `.tecla`'s own `display: grid`) so the pictogram and
+          // the word sit on one baseline-aligned line: Tailwind's utilities
+          // layer wins over the components layer `.tecla` lives in, which is
+          // the same layering `min-w-[30px]` on a key already relies on.
+          className="tecla flex items-center gap-1.5 px-2.5 sm:px-3"
+          aria-label={themeAriaLabel(theme)}
+          title={themeAriaLabel(theme)}
           onClick={(event: MouseEvent<HTMLButtonElement>) => {
             blurOnMouseActivation(event);
             setTheme(NEXT_THEME[theme]);
           }}
         >
-          {THEME_LABEL[theme]}
+          {THEME_ICON[theme]}
+          <span>{THEME_LABEL[theme]}</span>
         </button>
       </div>
       <HelpModal

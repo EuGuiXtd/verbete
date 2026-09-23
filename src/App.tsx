@@ -7,6 +7,7 @@ import { blurOnMouseActivation } from './ui/blurOnMouseActivation';
 import { GuessAnnouncer } from './ui/feedback/GuessAnnouncer';
 import { ToastHost } from './ui/feedback/ToastHost';
 import { Header } from './ui/layout/Header';
+import { Legend } from './ui/layout/Legend';
 import { ModeTabs } from './ui/layout/ModeTabs';
 import { Shell } from './ui/layout/Shell';
 import { Keyboard } from './ui/keyboard/Keyboard';
@@ -73,8 +74,19 @@ function GameScreen() {
             Quarteto need more room than that to lay two or four boards out
             side by side — see BoardGrid's own doc comment).
           */}
-          <div className="flex w-full flex-col items-center gap-6">
+          <div className="flex w-full flex-col items-center gap-4">
             <DailyRolloverBanner />
+            {/*
+              Feedback round 1, item 1: the colour map, on screen rather than
+              three paragraphs into a dialog behind a "?" — see Legend.tsx's
+              own doc comment for why a caption and not a repaint. Above the
+              boards, not below them, so it is the thing a first-time player
+              reads before their first guess rather than after it, and inside
+              this scrolling column rather than pinned to the header so a
+              short phone playing Quarteto spends its scarce vertical space
+              on the board.
+            */}
+            <Legend />
             <BoardGrid state={state} shakeToken={shakeToken} />
           </div>
           {/*
