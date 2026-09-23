@@ -503,7 +503,7 @@ const EMPTY_GLOSS_WORDS = new Set([
  * not. A content word is four letters or more, is not the redaction mark,
  * and is not in EMPTY_GLOSS_WORDS.
  */
-const MIN_CONTENT_WORDS = 2;
+const MIN_CONTENT_WORDS = 3;
 
 /**
  * How many redactions a gloss may carry before it stops being a definition
@@ -513,6 +513,27 @@ const MIN_CONTENT_WORDS = 2;
  * — and neither is worth showing a player.
  */
 const MAX_REDACTIONS = 2;
+
+/**
+ * How many redactions the PRIMARY sense may carry and still be preferred over
+ * a secondary sense that needs none — see buildDefinition's pass 2. One. A
+ * single struck-out headword reads as the printed-dictionary convention it
+ * imitates; two or more turn the reveal into a fill-in-the-blanks puzzle, and
+ * at that point an untouched secondary sense is the better reveal even when
+ * it is a marginal one.
+ */
+const MAX_PRIMARY_REDACTIONS = 1;
+
+/**
+ * Wiktionary glosses routinely end mid-construction, on the colon that would
+ * have introduced an example or on the comma of a list the extract cut short.
+ * That punctuation has nothing after it here, so it reads as a truncation
+ * defect rather than as typography. Dropped from the end of every shipped
+ * gloss, before and after an ellipsis added by truncateAtWordBoundary.
+ */
+function tidyGlossEnd(gloss: string): string {
+  return gloss.replace(/[\s:;,]+(…?)$/u, '$1');
+}
 
 function countOccurrences(text: string, mark: string): number {
   return text.split(mark).length - 1;
@@ -550,18 +571,35 @@ export function assertDefinitionDoesNotSpoil(word: string, definition: string): 
  * first sense is skipped this way in favour of its second ("ligar; juntar;
  * unir"), rather than failing the whole word.
  *
- * Two passes, in quality order:
+ * Four passes, in quality order. The ordering rule is that the PRIMARY sense
+ * — the first gloss of the first entry, the one the player almost certainly
+ * has in mind — wins unless it is badly damaged by redaction:
  *
- *   1. A gloss that never mentions the word at all. Always preferred: it
- *      reads exactly as Wiktionary wrote it.
- *   2. Failing that, the first gloss that survives redaction (see
- *      redactSpoilers) with MIN_CONTENT_WORDS real words still standing.
- *      Before this pass existed, 140 of the 141 gloss-less answers the C1
- *      review measured were here — common headwords like "saber", "votar",
- *      "reino" and "poeta" whose every sense restates them, which is what
- *      Portuguese dictionary glosses do.
+ *   1. The primary sense as Wiktionary wrote it, when it never mentions the
+ *      word. The ideal case, and the common one.
+ *   2. The primary sense with the headword struck out, when at most
+ *      MAX_PRIMARY_REDACTIONS mark is needed and MIN_CONTENT_WORDS real
+ *      words still stand. This pass is the answer to the re-review finding
+ *      that the old ordering preferred *any* non-spoiling sense over the
+ *      primary one: a common word's primary sense normally restates it, so
+ *      the old pass 1 silently reached for a marginal secondary and
+ *      redaction never ran — "metal" was defined as "dinheiro", "armas" as
+ *      "carreira militar", "águas" as "marés". "s.m. toda substância
+ *      simples, dotada de brilho próprio (brilho —)…" is the better reveal:
+ *      a reader meeting a struck-out headword can see they are looking at a
+ *      dictionary entry, while a reader meeting "dinheiro" for METAL just
+ *      gets a definition that feels wrong.
+ *   3. A secondary sense as written. A heavily-redacted primary is worse
+ *      than an untouched secondary, so the secondary still wins there —
+ *      "casar"'s own first sense ("ato de unir por casamento…") is skipped
+ *      this way in favour of "ligar; juntar; unir".
+ *   4. Any sense at all that survives redaction, under the full gates.
+ *      Before a redaction pass existed, 140 of the 141 gloss-less answers
+ *      the C1 review measured had nothing else — common headwords like
+ *      "saber", "votar", "reino" and "poeta" whose every sense restates
+ *      them, which is what Portuguese dictionary glosses do.
  *
- * Returns null when nothing survives either pass. With the daily-pool
+ * Returns null when nothing survives any pass. With the daily-pool
  * invariant in assertBuildInvariants that now means the word does not ship
  * as an answer at all (it stays a valid guess) — see buildDictionary.
  */
@@ -571,33 +609,57 @@ export function buildDefinition(word: string, entries: readonly WiktionaryEntry[
     return abbrev === '' ? gloss : `${abbrev} ${gloss}`;
   };
 
-  for (const entry of entries) {
-    for (const sense of entry.senses ?? []) {
-      const gloss = truncateAtWordBoundary(
-        collapseWhitespace(sense.glosses?.[0] ?? ''),
-        MAX_GLOSS_LENGTH,
-      );
-      if (gloss === '') continue;
-      if (spoilsAnswer(word, gloss)) continue;
-      return withAbbrev(entry, gloss);
-    }
+  /** Every non-empty gloss, in file order. The first is the primary sense. */
+  const candidates = entries.flatMap((entry) =>
+    (entry.senses ?? [])
+      .map((sense) => ({ entry, gloss: collapseWhitespace(sense.glosses?.[0] ?? '') }))
+      .filter((candidate) => candidate.gloss !== ''),
+  );
+  const primary = candidates[0];
+  if (primary === undefined) return null;
+  const secondaries = candidates.slice(1);
+
+  /** The gloss exactly as Wiktionary wrote it, or null if it would spoil. */
+  const asWritten = (candidate: (typeof candidates)[number]): string | null => {
+    const gloss = tidyGlossEnd(truncateAtWordBoundary(candidate.gloss, MAX_GLOSS_LENGTH));
+    return spoilsAnswer(word, gloss) ? null : gloss;
+  };
+
+  /** The gloss with the headword struck out, or null if too little survives. */
+  const asRedacted = (
+    candidate: (typeof candidates)[number],
+    maxRedactions: number,
+  ): string | null => {
+    const redacted = tidyGlossEnd(
+      truncateAtWordBoundary(redactSpoilers(word, candidate.gloss), MAX_GLOSS_LENGTH),
+    );
+    // Belt and braces: truncation cannot reintroduce the stem, but a
+    // future change to either step must not be able to either.
+    if (spoilsAnswer(word, redacted)) return null;
+    if (contentWordCount(redacted) < MIN_CONTENT_WORDS) return null;
+    if (countOccurrences(redacted, REDACTION) > maxRedactions) return null;
+    return redacted;
+  };
+
+
+  // 1. The primary sense as written.
+  const written = asWritten(primary);
+  if (written !== null) return withAbbrev(primary.entry, written);
+
+  // 2. The primary sense, lightly redacted.
+  const struck = asRedacted(primary, MAX_PRIMARY_REDACTIONS);
+  if (struck !== null) return withAbbrev(primary.entry, struck);
+
+  // 3. A secondary sense as written.
+  for (const candidate of secondaries) {
+    const gloss = asWritten(candidate);
+    if (gloss !== null) return withAbbrev(candidate.entry, gloss);
   }
 
-  for (const entry of entries) {
-    for (const sense of entry.senses ?? []) {
-      const collapsed = collapseWhitespace(sense.glosses?.[0] ?? '');
-      if (collapsed === '') continue;
-      const redacted = truncateAtWordBoundary(
-        redactSpoilers(word, collapsed),
-        MAX_GLOSS_LENGTH,
-      );
-      // Belt and braces: truncation cannot reintroduce the stem, but a
-      // future change to either step must not be able to either.
-      if (spoilsAnswer(word, redacted)) continue;
-      if (contentWordCount(redacted) < MIN_CONTENT_WORDS) continue;
-      if (countOccurrences(redacted, REDACTION) > MAX_REDACTIONS) continue;
-      return withAbbrev(entry, redacted);
-    }
+  // 4. Any sense at all that survives redaction.
+  for (const candidate of candidates) {
+    const gloss = asRedacted(candidate, MAX_REDACTIONS);
+    if (gloss !== null) return withAbbrev(candidate.entry, gloss);
   }
 
   return null;

@@ -81,10 +81,18 @@ describe('buildDefinition', () => {
     ).toBeNull();
   });
 
-  it('keeps a redacted gloss that still carries two real content words', () => {
-    expect(buildDefinition('saber', [noun('saber', 'conhecimento; aquilo que se sabe')])).toBe(
-      's.f. conhecimento; aquilo que se —',
-    );
+  // MIN_CONTENT_WORDS is 3, and these two pin it from both sides. It was 2
+  // until the final review read the shipped reveals instead of counting them
+  // and found a dozen that cleared the old bar while telling the player
+  // nothing — "lagoa: — de pouca extensão", "galês: nativo do País de —".
+  it('keeps a redacted gloss that still carries three real content words', () => {
+    expect(
+      buildDefinition('saber', [noun('saber', 'conhecimento; aquilo que se sabe por estudo')]),
+    ).toBe('s.f. conhecimento; aquilo que se — por estudo');
+  });
+
+  it('refuses a redacted gloss down to two content words — one short of the bar', () => {
+    expect(buildDefinition('saber', [noun('saber', 'conhecimento; aquilo que se sabe')])).toBeNull();
   });
 });
 

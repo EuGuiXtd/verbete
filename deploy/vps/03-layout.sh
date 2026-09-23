@@ -9,10 +9,10 @@
 # Layout, copiado do /srv/rpg desta mesma VPS:
 #
 #   /srv/verbete        root:root 755   -- so o root cria ou renomeia coisas aqui
-#   /srv/verbete/app    qyro:qyro 755   -- o que o nginx serve; unico alvo do rsync
-#   /srv/verbete/bin    root:root 755   -- scripts que o qyro executa e nao reescreve
+#   /srv/verbete/app    <APP_USER> 755  -- o que o nginx serve; unico alvo do rsync
+#   /srv/verbete/bin    root:root 755   -- scripts que o APP_USER executa e nao reescreve
 #
-# O dono importa: se /srv/verbete fosse do qyro, um deploy conseguiria trocar
+# O dono importa: se /srv/verbete fosse do APP_USER, um deploy conseguiria trocar
 # `app` por um link simbolico e fugir do diretorio. Sendo do root, nao consegue.
 set -euo pipefail
 
@@ -24,6 +24,17 @@ set -euo pipefail
 #   export VPS_KEY=~/.ssh/sua_chave      # opcional; o padrao esta abaixo
 VPS="${VPS:?defina VPS=usuario@host antes de rodar (veja deploy/vps/README.md)}"
 KEY="${VPS_KEY:-$HOME/.ssh/qyro_vps}"
+
+# O dono de /srv/verbete/app tambem nao fica escrito aqui: sai do proprio VPS.
+# Quando VPS e um apelido do ~/.ssh/config nao ha usuario para extrair, e ai o
+# script pergunta em vez de chutar -- errar o dono deixa o nginx servindo um
+# diretorio que o rsync nao consegue escrever, que e um modo de falhar chato de
+# diagnosticar. (VPS_KEY continua com um padrao: e um arquivo no laptop de quem
+# roda, nao um dado sobre a origem.)
+case "${VPS}" in
+  *@*) APP_USER="${APP_USER:-${VPS%@*}}" ;;
+  *)   APP_USER="${APP_USER:?VPS e um apelido do ssh; defina APP_USER=<dono de /srv/verbete/app>}" ;;
+esac
 RAIZ=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 WRAPPER="${RAIZ}/deploy/vps/deploy-wrapper.sh"
 
@@ -45,12 +56,12 @@ ssh -i "${KEY}" -o BatchMode=yes "${VPS}" 'rm -rf /tmp/verbete-provision && mkdi
 scp -q -i "${KEY}" "${WRAPPER}" "${VPS}:/tmp/verbete-provision/deploy-wrapper.sh"
 
 echo ">>> montando o layout"
-ssh -i "${KEY}" -o BatchMode=yes "${VPS}" "sudo env SOMA_LOCAL='${SOMA_LOCAL}' bash -s" <<'REMOTE'
+ssh -i "${KEY}" -o BatchMode=yes "${VPS}" "sudo env SOMA_LOCAL='${SOMA_LOCAL}' APP_USER='${APP_USER}' bash -s" <<'REMOTE'
 set -euo pipefail
 S=/tmp/verbete-provision
 
 install -d -m 755 -o root -g root /srv/verbete /srv/verbete/bin
-install -d -m 755 -o qyro -g qyro /srv/verbete/app
+install -d -m 755 -o "$APP_USER" -g "$APP_USER" /srv/verbete/app
 
 install -m 755 -o root -g root "$S/deploy-wrapper.sh" /srv/verbete/bin/deploy-wrapper.sh
 
@@ -73,7 +84,7 @@ if [ ! -e /srv/verbete/app/index.html ]; then
 body{margin:0;display:grid;place-items:center;min-height:100vh;text-align:center;padding:1rem}</style>
 </head><body><main><h1>Verbete</h1><p>Em breve.</p></main></body></html>
 HTML
-  chown qyro:qyro /srv/verbete/app/index.html
+  chown "$APP_USER:$APP_USER" /srv/verbete/app/index.html
   chmod 644 /srv/verbete/app/index.html
   echo "    index.html provisorio criado"
 else

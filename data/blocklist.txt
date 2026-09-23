@@ -116,3 +116,55 @@ erica   # Erica is a plant GENUS (heather), so the gloss is "nome comum dado às
 marta   # the pine marten (Martes martes); its whole gloss redacts to "mamífero carnívoro (— —)" because the binomial repeats the headword, and the frequency rank comes from the first name Marta
 lúcia   # a plant genus (Lucya) whose gloss redacts to "nome para as plantas do gênero —"; the frequency rank comes entirely from the first name Lúcia — exactly the "lúcio"/"simão" case above
 pence   # English: the plural of penny. Not tagged Anglicism in this dataset, so isTaggedForeignLoanword misses it — same as "pager"/"remix"/"modem" above
+
+# Homographs and a bad-data outlier, found by the final whole-branch review
+# (2026-09-22) by reading the shipped reveals rather than by counting them.
+#
+# The first three are inflected forms that happen to collide with a rare noun
+# Wiktionary genuinely documents, so the head-form filter passes them for the
+# right reason and picks the noun's gloss — leaving a reveal that contradicts
+# the word every player actually has in mind. The head-form rule exists so a
+# real definition exists; here one does, and it is the wrong one.
+pensa   # "he/she thinks" to any player; Wiktionary's noun sense is a pension ("reforma, renda vitalícia")
+volte   # imperative of "voltar" to any player; Wiktionary's noun sense is a card-game move
+curte   # "he/she enjoys" to any player; the noun sense is slang, and needs redacting on top
+# Plurals whose only gloss is a marginal sense of the singular. The reveal
+# reads as a different word rather than as the one just guessed.
+águas   # plural of "água", revealed as "marés" (tides)
+secos   # plural adjective, revealed as "gêneros alimentícios —"
+# Source data error, not a filter gap: the entry is tagged lang_code "pt" but
+# the gloss is Galician ("dous", "na que confluem"). The language filter at
+# loadEligibleWiktionaryEntries is doing its job; Wiktionary mislabelled this
+# one. Scanned every shipped gloss for Galician markers ("dous", "unha", "na
+# que", "moi"...): three matched, and two were Portuguese all along ("unha
+# aguçada" in "garra" is a claw, not the Galician article). This is the only
+# real one.
+linda   # "beautiful" to any player; gloss is a Galician entry about a boundary line
+
+# Glosses whose surviving words, after the headword is struck out, are all
+# relational ("relativo a", "seu povo", "usado na locucao") and so define
+# nothing. Not a rule the build can apply — contentWordCount counts these as
+# content words, and rightly, since the same words carry real definitions
+# elsewhere. Judged by reading, which is how the final review found them.
+#
+# Kept deliberately, same shape but the remainder does define: sueco ("lingua
+# germanica falada na — e em partes da Finlandia"), gales, sirio, persa,
+# basco, checo ("natural ou que habita na —, regiao na — ocidental" still
+# locates it). The pattern is not uniform across demonyms, so this is three
+# entries rather than a category.
+celta   # "relativo a — (substantivo de dois generos) ou aos —"
+turco   # "relativo a —, seu povo, — e historia"
+farta   # "usado na locucao adverbial a —"
+
+# Found when the pool change above reshuffled the deck and put "corno" on day
+# one as the Solo daily. These three are the same class the vulgar/pejorative
+# scan above already blocks — they were simply missed by it, and the miss only
+# became visible because the deck moved.
+#
+# Same rule as that section: blocked where the dominant Brazilian usage IS the
+# offensive one. Deliberately NOT blocked, by that same rule, and re-checked
+# now: burro, bunda, tonto, chato, louco, morto, matar, bater, droga, punir —
+# each has a dominant innocent sense.
+veado   # a common homophobic slur in Brazil despite the literal "deer" sense — exactly the reasoning already applied to "bicha" and "mongo", and it should have been caught then
+peido   # the noun "fart"; "peida" is already blocked as vulgar slang two sections up, so leaving its own base noun in was an inconsistency
+corno   # a common insult ("cuckold"); the literal "horn" sense is not what a Brazilian player reads first

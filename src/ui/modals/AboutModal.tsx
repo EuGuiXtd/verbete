@@ -130,7 +130,7 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
             O tipo usado neste jogo é o <strong>Newsreader</strong>, dos autores do projeto Newsreader
             (
             <a
-              href="http://github.com/productiontype/Newsreader"
+              href="https://github.com/productiontype/Newsreader"
               target="_blank"
               rel="noreferrer"
               className="underline decoration-rule underline-offset-2"
