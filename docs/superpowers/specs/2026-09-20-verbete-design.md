@@ -313,7 +313,7 @@ Sendo estático, o precedente certo na VPS é o **nossario** (nginx servindo arq
 ```
 nginx sites-enabled:  amgseg · nossario · qyro · rpg
 certificado devduraes.com.br:  devduraes.com.br, www.devduraes.com.br   ← SEM wildcard
-DNS devduraes.com.br:  A apex → 179.198.97.215 (proxied) · CNAME www (proxied)
+DNS devduraes.com.br:  A apex → <IP da origem, nao versionado> (proxied) · CNAME www (proxied)
 PM2:  qyro-web ×2, amgseg-web ×1   ← rpg-web NÃO existe
 /srv:  amgseg · nossario · qyro · rpg
 ```
