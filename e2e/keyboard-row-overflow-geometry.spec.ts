@@ -120,7 +120,7 @@ test.describe('keyboard row overflow at 320px does not strand a key off-screen',
         // future change that reintroduces a per-key width, or retunes that
         // ratio without thinking, shows up here as rows that no longer agree.
         const letterWidths = await page
-          .locator(`${KEYBOARD} button:not([aria-label="Enviar tentativa"]):not([aria-label="Apagar última letra"])`)
+          .locator(`${KEYBOARD} button:not([aria-label="Enviar tentativa"]):not([aria-label="Apagar letra"])`)
           .evaluateAll((keys) => keys.map((key) => Math.round(key.getBoundingClientRect().width * 10) / 10));
         expect(letterWidths).toHaveLength(26);
         // 3% rather than an absolute pixel figure, and not zero: the three

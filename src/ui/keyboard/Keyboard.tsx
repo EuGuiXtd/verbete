@@ -99,7 +99,7 @@ const SPACER_CLASS: Record<string, string | undefined> = {
  * container width is the VIEWPORT will always overflow at some viewport, and
  * the only question is which one.
  *
- * So the constant is gone. Every key in this row is `flex: 1.8 1 0` or
+ * So the constant is gone. Every key in this row is `flex: 1.5 1 0` or
  * `flex: 1 1 0` with `min-width: 0` (see Key.tsx and `ActionKey` above), so
  * a row's keys divide whatever width the row HAS rather than adding up to a
  * width the row must find; the inter-key gap is itself a `clamp()` on `vw`
@@ -157,7 +157,7 @@ export function Keyboard({ states, boardCount, onKey, onEnter, onBackspace }: Ke
             {actions > 0 && (
               <>
                 <ActionKey label="enviar" ariaLabel="Enviar tentativa" onPress={onEnter} />
-                <ActionKey label="apagar" ariaLabel="Apagar última letra" onPress={onBackspace} />
+                <ActionKey label="apagar" ariaLabel="Apagar letra" onPress={onBackspace} />
               </>
             )}
             {spacer !== undefined && <div aria-hidden="true" className={spacer} />}

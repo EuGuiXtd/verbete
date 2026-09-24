@@ -29,10 +29,15 @@ import type { KeyState } from '../../engine/keyboard';
  * and `min-h-11` still holds the touch target in the dimension that actually
  * governs a mis-tap between rows.
  *
- * What this produces, measured in Chromium at real viewports: ~24px a side
- * at 280px, ~26px at 320px, ~32px at 390px, and the full 44px from about
- * 600px up. WCAG 2.2 AA's target-size minimum is 24px, so even 280px —
- * narrower than any phone still sold — clears it.
+ * What this produces, re-measured in Chromium across thirteen viewports
+ * during review: 24.2px a side at 280px, 27.8 at 320, 31.5 at 360, 34.6 at
+ * 390, 36.3 at 412, and the 44px ceiling from about 500px up. WCAG 2.2 AA's
+ * target-size minimum is 24px, so even 280px — narrower than any phone still
+ * sold — clears it. It stops clearing it below ~278px (23.05 at 268), which
+ * is no shipping device; do not read the 280px figure as a floor with room
+ * under it. Because the horizontal padding is zero, the visible key IS the
+ * tap target, so a near-miss lands on a neighbouring letter rather than on
+ * dead space — the right failure mode when `apagar` is one tap away.
  *
  * Layered on top of the treatment class the same way src/dev/Showcase.tsx
  * layers `w-9` / `px-4` alongside `.tecla` — geometry, not a second copy of

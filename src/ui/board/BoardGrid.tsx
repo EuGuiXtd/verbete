@@ -93,7 +93,7 @@ export function BoardGrid({ state, shakeToken = 0, onSelectCell }: BoardGridProp
     boardCount <= 1
       ? 'flex w-full max-w-sm flex-col items-center'
       : boardCount === 2
-        ? 'grade-dupla grid w-full max-w-3xl grid-cols-2 items-start gap-2 sm:gap-6'
+        ? 'grade-dupla grid w-full max-w-3xl grid-cols-2 items-start gap-3 sm:gap-6'
         : 'grade-compacta grid w-full max-w-md grid-cols-2 items-start gap-3 lg:max-w-6xl lg:grid-cols-4 lg:gap-6';
 
   return (

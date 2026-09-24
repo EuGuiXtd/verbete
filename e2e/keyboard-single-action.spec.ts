@@ -14,7 +14,7 @@ test.describe('keyboard-only activation', () => {
     // property previously rested on usePhysicalKeyboard.ts's documented
     // spec assumption (`isButtonOwnedActivationKey`) rather than an
     // observation in a real browser, which does fire that click.
-    await page.getByRole('button', { name: 'Apagar última letra' }).focus();
+    await page.getByRole('button', { name: 'Apagar letra' }).focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('.sorte-preenchida')).toHaveCount(3);
 

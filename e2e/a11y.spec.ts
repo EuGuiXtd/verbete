@@ -252,7 +252,7 @@ test.describe('keyboard reachability (Task 25)', () => {
       'Começar uma nova palavra',
       ...'QWERTYUIOPASDFGHJKLZXCVBNM'.split(''),
       'Enviar tentativa',
-      'Apagar última letra',
+      'Apagar letra',
     ];
 
     for (const name of expectedNames) {
