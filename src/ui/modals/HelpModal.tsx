@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
 import { blurOnMouseActivation } from '../blurOnMouseActivation';
+import { Legend } from '../layout/Legend';
 import { Modal } from './Modal';
 
 export interface HelpModalProps {
@@ -39,6 +40,21 @@ export function HelpModal({ isOpen, onClose, onOpenAbout }: HelpModalProps) {
           marcas são lidas como <strong>correta</strong>, <strong>na posição errada</strong> e{' '}
           <strong>ausente</strong>.
         </p>
+        {/*
+          Feedback round 1, item 1: the same swatches the game screen now
+          shows above the board (src/ui/layout/Legend.tsx), repeated here in
+          their roomier stacked form. The paragraph above describes the three
+          marks in words; a reader who did not recognise them on the board is
+          unlikely to recognise them from a description of them either, so
+          the dialog shows the actual blocks next to their names.
+        */}
+        <Legend stacked />
+        <p>
+          Dá para <strong>escolher em qual bloco escrever</strong>: toque ou clique num bloco da linha que
+          você está preenchendo — ou use as setas <strong>&larr;</strong> e <strong>&rarr;</strong> — e as
+          letras passam a entrar a partir dali, em vez de sempre da esquerda para a direita. O bloco
+          escolhido fica marcado com um contorno.
+        </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
             <strong>Solo:</strong> 1 palavra, 6 tentativas.
@@ -55,6 +71,20 @@ export function HelpModal({ isOpen, onClose, onOpenAbout }: HelpModalProps) {
           seguidas contam para a sequência nas estatísticas. No modo <strong>Infinito</strong> dá para jogar
           quantas palavras quiser, mas essas partidas não avançam nem quebram a sequência — só contam para o
           total de jogadas e vitórias.
+        </p>
+        {/*
+          Feedback round 1, item 9 — accepted rather than fixed, and said out
+          loud instead of left to be discovered. Verbete is a static site with
+          no accounts and no server: "já joguei o diário de hoje" lives in
+          this browser's own storage, so another browser, another device or an
+          anonymous window genuinely is a fresh start. The alternative is
+          fingerprinting, which this game will not do. One honest sentence is
+          cheaper than a player deciding the game is broken.
+        */}
+        <p>
+          O <strong>Diário</strong> é guardado em cada navegador separadamente. Se você abrir o Verbete em
+          outro navegador, em outro aparelho ou numa janela anônima, a palavra do dia aparece como nova — o
+          jogo não tem contas nem servidor, então não há como reconhecer que é você.
         </p>
         <div className="folha-regua" />
         <p>

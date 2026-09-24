@@ -8,11 +8,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { createMatch, reduce } from '../engine/match';
+import { createMatch, emptyDraft, reduce } from '../engine/match';
 import type { Action, Effect, InvalidReason, MatchState } from '../engine/match';
 import { dayKeyOf, epochDayOf } from '../engine/clock';
 import { dailyAnswers, dailyNumber as computeDailyNumber } from '../engine/daily';
-import { MODES, VARIANTS, VARIANT_ORDER, WORD_LENGTH } from '../engine/constants';
+import { EMPTY_SLOT, MODES, VARIANTS, VARIANT_ORDER, WORD_LENGTH } from '../engine/constants';
 import type { Mode, Variant } from '../engine/types';
 import { DICTIONARY_VERSION, dailyPool, isValidGuess, pickRandomAnswer } from '../data/dictionary';
 import { loadDefinition } from '../data/definitions';
@@ -27,7 +27,7 @@ import {
 } from '../storage/repository';
 import { computeAnswersHash } from '../storage/schema';
 import type { ProgressRecord } from '../storage/schema';
-import { buildAnnouncement, buildDefinitionsAnnouncement } from './announce';
+import { buildAnnouncement, buildCursorAnnouncement, buildDefinitionsAnnouncement } from './announce';
 import { useReveal } from './useReveal';
 import { useDailyRollover } from './useDailyRollover';
 import { useStats } from './useStats';
@@ -95,9 +95,27 @@ export interface MatchContextValue {
    * `newMatch`/`selectMode`/`applyDailyRollover`.
    */
   readonly definitionAnnouncement: string;
+  /**
+   * The pt-BR sentence naming the house the insertion point just moved to,
+   * read through a THIRD live region of its own (feedback round 1, item 3).
+   * Its own region for the same reason the definition line has one: the
+   * row/outcome region is `aria-atomic`, so borrowing it would re-read the
+   * whole last-guess sentence every time a player pressed an arrow key, and
+   * overwriting it would destroy the summary they may not have heard yet.
+   * Set only by an explicit CURSOR_MOVED effect — the automatic advance
+   * after every keystroke deliberately says nothing (see engine/match.ts).
+   */
+  readonly positionAnnouncement: string;
   readonly dismissToast: (id: number) => void;
   readonly type: (letter: string) => void;
   readonly backspace: () => void;
+  /**
+   * Moves the insertion point to a house of the active row, clamped by the
+   * engine. Driven by a tap on a tile (see src/ui/board/Tile.tsx) and by the
+   * arrow keys (see usePhysicalKeyboard) — the two paths are the same action
+   * and differ in nothing but who dispatched it.
+   */
+  readonly moveCursor: (index: number) => void;
   readonly submit: () => void;
   /** Only meaningful in infinite mode; a no-op while a daily match is active. */
   readonly newMatch: () => void;
@@ -245,7 +263,42 @@ function replayMatch(record: ProgressRecord, answers: readonly string[]): MatchS
   if (state.status !== 'playing') {
     return record.finishedAt != null ? { ...state, finishedAt: record.finishedAt } : state;
   }
-  return { ...state, draft: record.draft };
+  const draft = normalizeStoredDraft(record.draft);
+  return { ...state, draft, cursor: firstEmptySlot(draft) };
+}
+
+/**
+ * A stored draft, forced into the shape `MatchState` now requires: exactly
+ * `WORD_LENGTH` characters, `EMPTY_SLOT` for a house nobody filled.
+ *
+ * Two jobs, both load-bearing. The first is migration, and it needs no
+ * storage-schema version bump to do it: every draft written before feedback
+ * round 1, item 3 was a left-packed string of 0 to 5 letters, and padding
+ * one on the right with empty houses reproduces it EXACTLY — "CA" was a C, an
+ * A, and three untouched houses then, and is a C, an A and three untouched
+ * houses now. A record written by the new code round-trips unchanged, since
+ * it is already the right length. The second is the ordinary defensiveness
+ * every other loader in this file practises (see `hasReplayableAnswers`):
+ * `loadProgress` hands back whatever `JSON.parse` produced, cast rather than
+ * validated, so a hand-edited or corrupt record can carry a number, a null,
+ * or a forty-character string, none of which may reach the board.
+ */
+function normalizeStoredDraft(raw: unknown): string {
+  if (typeof raw !== 'string') return emptyDraft();
+  const trimmed = raw.slice(0, WORD_LENGTH);
+  return trimmed.padEnd(WORD_LENGTH, EMPTY_SLOT);
+}
+
+/**
+ * Where the insertion point sits on a restored match: the first unfilled
+ * house, or past the end when the draft is complete. Not persisted, on
+ * purpose — the cursor is where the player's attention is, and attention
+ * does not survive closing a tab. Deriving it puts a reloaded match exactly
+ * where continuing to type would leave it.
+ */
+function firstEmptySlot(draft: string): number {
+  const index = draft.indexOf(EMPTY_SLOT);
+  return index === -1 ? WORD_LENGTH : index;
 }
 
 /**
@@ -558,6 +611,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
   const [toasts, setToasts] = useState<readonly ToastMessage[]>([]);
   const [shakeToken, setShakeToken] = useState(0);
   const [announcement, setAnnouncement] = useState('');
+  const [positionAnnouncement, setPositionAnnouncement] = useState('');
   const [definitionAnnouncement, setDefinitionAnnouncement] = useState('');
   const reveal = useReveal();
   const stats = useStats();
@@ -661,6 +715,12 @@ export function MatchProvider({ children }: MatchProviderProps) {
     let finishedStatus: 'won' | 'lost' | null = null;
     for (const effect of slice.pendingEffects) {
       switch (effect.type) {
+        case 'CURSOR_MOVED':
+          // The one announcement in this loop that is not about a guess, and
+          // the only effect a MOVE_CURSOR can ever produce — so it needs
+          // none of the per-guess bookkeeping the cases below share.
+          setPositionAnnouncement(buildCursorAnnouncement(activeMatch, effect.index));
+          break;
         case 'REJECTED':
           setToasts((current) => [...current, { id: nextToastId(), text: REJECTION_MESSAGE[effect.reason] }]);
           setShakeToken((n) => n + 1);
@@ -757,6 +817,10 @@ export function MatchProvider({ children }: MatchProviderProps) {
     () => dispatchProvider({ type: 'MATCH_ACTION', action: { type: 'BACKSPACE' } }),
     [],
   );
+  const moveCursor = useCallback(
+    (index: number) => dispatchProvider({ type: 'MATCH_ACTION', action: { type: 'MOVE_CURSOR', index } }),
+    [],
+  );
   const submit = useCallback(() => {
     // The reveal gate: belongs here, in the UI, not in the engine. The
     // reducer is synchronous and would happily score a second guess the
@@ -788,6 +852,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
     // callback already resets for the same "starting fresh" reason.
     setAnnouncement('');
     setDefinitionAnnouncement(''); // same reason, same region pair — see MatchContextValue's own doc comment
+    setPositionAnnouncement(''); // and the third region, for the same reason again
   }, []);
 
   const selectMode = useCallback(
@@ -802,6 +867,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
       setShakeToken(0);
       setAnnouncement(''); // see newMatch's own comment on why this cannot be skipped
       setDefinitionAnnouncement('');
+      setPositionAnnouncement('');
     },
     [flushActiveProgress],
   );
@@ -812,6 +878,7 @@ export function MatchProvider({ children }: MatchProviderProps) {
     setShakeToken(0);
     setAnnouncement(''); // see newMatch's own comment on why this cannot be skipped
     setDefinitionAnnouncement('');
+    setPositionAnnouncement('');
   }, [slice.active.variant]);
 
   const dailyNumber = activeMatch.dayKey !== null ? computeDailyNumber(activeMatch.dayKey) : null;
@@ -831,9 +898,11 @@ export function MatchProvider({ children }: MatchProviderProps) {
       shakeToken,
       announcement,
       definitionAnnouncement,
+      positionAnnouncement,
       dismissToast,
       type,
       backspace,
+      moveCursor,
       submit,
       newMatch,
       active: slice.active,
@@ -849,9 +918,11 @@ export function MatchProvider({ children }: MatchProviderProps) {
       shakeToken,
       announcement,
       definitionAnnouncement,
+      positionAnnouncement,
       dismissToast,
       type,
       backspace,
+      moveCursor,
       submit,
       newMatch,
       slice.active,

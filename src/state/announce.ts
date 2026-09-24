@@ -1,4 +1,5 @@
 import { parseDefinition } from '../data/definitions';
+import { EMPTY_SLOT, WORD_LENGTH } from '../engine/constants';
 import { boardRows } from '../engine/match';
 import type { MatchState } from '../engine/match';
 import type { Tile } from '../engine/types';
@@ -220,4 +221,33 @@ export function buildDefinitionsAnnouncement(
       : `Definição de ${only.answer}: ${only.gloss}.`;
   }
   return `Definições — ${entries.map((entry) => `${entry.answer}: ${entry.gloss ?? NO_GLOSS}`).join('; ')}.`;
+}
+
+/**
+ * The pt-BR sentence read when the player moves the insertion point on
+ * purpose — by tapping a house or by pressing an arrow key (feedback round
+ * 1, item 3). Spoken through its own live region (GuessAnnouncer.tsx's
+ * third `role="status"`), never the row/outcome one.
+ *
+ * "Posição", not "bloco" or "casa": that is the noun this product already
+ * uses for a place in the word, in the two per-tile labels Task 25 wrote
+ * ("na posição correta", "existe na palavra, posição errada") — so a player
+ * hearing "Posição 3" here and "na posição correta" a moment later is
+ * hearing one word for one thing. One-based for the same reason the boards
+ * are ("Tabuleiro 1"): nothing a player is ever told about this game counts
+ * from zero.
+ *
+ * The letter, or "vazia", because the whole point of moving there is to
+ * decide what to do with what is already in it, and a listener has no
+ * board to glance at. `index` out of range answers with the empty string
+ * rather than inventing a position — the only way to reach that is
+ * `WORD_LENGTH` itself, the past-the-end resting place a completed draft
+ * leaves the cursor in, which no MOVE_CURSOR can produce (see
+ * engine/match.ts) and which names no house to announce.
+ */
+export function buildCursorAnnouncement(state: MatchState, index: number): string {
+  if (index < 0 || index >= WORD_LENGTH) return '';
+  const letter = state.draft[index];
+  const content = letter === undefined || letter === EMPTY_SLOT ? 'vazia' : letter;
+  return `Posição ${String(index + 1)}, ${content}.`;
 }

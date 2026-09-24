@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatch, reduce } from '../../engine/match';
 import type { EngineDeps, MatchState } from '../../engine/match';
-import { buildAnnouncement, buildDefinitionsAnnouncement } from '../announce';
+import { buildAnnouncement, buildCursorAnnouncement, buildDefinitionsAnnouncement } from '../announce';
 import { STATUS_HEADLINE } from '../../ui/modals/ResultModal';
 
 const deps: EngineDeps = { isValidGuess: () => true, now: () => 1_000 };
@@ -282,5 +282,39 @@ describe('buildAnnouncement', () => {
         buildDefinitionsAnnouncement([{ answer: 'cobra' }, { answer: 'casal' }], ['s.f. réptil', null]),
       ).toMatch(/^Definições — /);
     });
+  });
+});
+
+/**
+ * Feedback round 1, item 3. The insertion point is a purely visual mark —
+ * an inset rule on one tile — so for a player who receives no ink at all
+ * this sentence IS the feature. Everything below is about it saying enough
+ * to act on: which house, and what is already sitting in it.
+ */
+describe('buildCursorAnnouncement', () => {
+  function withDraft(draft: string): MatchState {
+    const state = createMatch({ variant: 'solo', mode: 'infinito', dayKey: null, answers: ['casal'], startedAt: 0 });
+    return { ...state, draft };
+  }
+
+  it('names the house one-based, like every other number this game says out loud', () => {
+    expect(buildCursorAnnouncement(withDraft('     '), 0)).toBe('Posição 1, vazia.');
+    expect(buildCursorAnnouncement(withDraft('     '), 4)).toBe('Posição 5, vazia.');
+  });
+
+  it('reads back the letter already in the house, since that is what the player moved there to deal with', () => {
+    expect(buildCursorAnnouncement(withDraft('PRATO'), 2)).toBe('Posição 3, A.');
+  });
+
+  it('distinguishes an empty house from a filled one', () => {
+    expect(buildCursorAnnouncement(withDraft('P R O'), 1)).toBe('Posição 2, vazia.');
+    expect(buildCursorAnnouncement(withDraft('P R O'), 2)).toBe('Posição 3, R.');
+  });
+
+  it('says nothing for a position that is not a house', () => {
+    // WORD_LENGTH is a legal cursor value — where a completed draft parks —
+    // but it names no house, and no MOVE_CURSOR can produce it anyway.
+    expect(buildCursorAnnouncement(withDraft('PRATO'), 5)).toBe('');
+    expect(buildCursorAnnouncement(withDraft('PRATO'), -1)).toBe('');
   });
 });

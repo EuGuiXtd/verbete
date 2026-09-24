@@ -14,7 +14,7 @@ afterEach(() => {
 describe('usePhysicalKeyboard', () => {
   it('maps a lowercase letter key to the uppercase letter handler', () => {
     const onLetter = vi.fn();
-    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() }));
+    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
     dispatchKey('a');
 
@@ -24,7 +24,7 @@ describe('usePhysicalKeyboard', () => {
   it('maps Enter to submit and Backspace to delete', () => {
     const onEnter = vi.fn();
     const onBackspace = vi.fn();
-    renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace }));
+    renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace , onMoveCursor: vi.fn() }));
 
     dispatchKey('Enter');
     dispatchKey('Backspace');
@@ -35,7 +35,7 @@ describe('usePhysicalKeyboard', () => {
 
   it('ignores a letter typed with a modifier, so browser/OS shortcuts pass through untouched', () => {
     const onLetter = vi.fn();
-    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() }));
+    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
     dispatchKey('r', { ctrlKey: true });
     dispatchKey('r', { metaKey: true });
@@ -49,7 +49,7 @@ describe('usePhysicalKeyboard', () => {
     // "a" + shiftKey semantics that must be undone) — Shift alone is not
     // the kind of modifier this hook exists to reject; Ctrl/Alt/Meta are.
     const onLetter = vi.fn();
-    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() }));
+    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
     dispatchKey('A', { shiftKey: true });
 
@@ -60,7 +60,7 @@ describe('usePhysicalKeyboard', () => {
     const onLetter = vi.fn();
     const input = document.createElement('input');
     document.body.appendChild(input);
-    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() }));
+    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
 
@@ -76,7 +76,7 @@ describe('usePhysicalKeyboard', () => {
     // rich-text editor's markup looks like.
     editable.setAttribute('contenteditable', 'true');
     document.body.appendChild(editable);
-    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() }));
+    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
     editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
 
@@ -85,7 +85,7 @@ describe('usePhysicalKeyboard', () => {
 
   it('ignores non-letter, non-control keys — digits, punctuation and accented/dead keys', () => {
     const onLetter = vi.fn();
-    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() }));
+    renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
     dispatchKey('1');
     dispatchKey('ç');
@@ -97,7 +97,7 @@ describe('usePhysicalKeyboard', () => {
 
   it('removes its listener on unmount', () => {
     const onLetter = vi.fn();
-    const { unmount } = renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() }));
+    const { unmount } = renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
     unmount();
     dispatchKey('a');
@@ -115,7 +115,7 @@ describe('usePhysicalKeyboard', () => {
       const onEnter = vi.fn();
       const button = document.createElement('button');
       document.body.appendChild(button);
-      renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace: vi.fn() }));
+      renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
       button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 
@@ -141,7 +141,7 @@ describe('usePhysicalKeyboard', () => {
         actions += 1; // stands in for the button's own onClick (e.g. onBackspace)
       });
       document.body.appendChild(button);
-      renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace: vi.fn() }));
+      renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
       button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -156,7 +156,7 @@ describe('usePhysicalKeyboard', () => {
       const onLetter = vi.fn();
       const button = document.createElement('button');
       document.body.appendChild(button);
-      renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() }));
+      renderHook(() => usePhysicalKeyboard({ onLetter, onEnter: vi.fn(), onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
       button.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
 
@@ -168,7 +168,7 @@ describe('usePhysicalKeyboard', () => {
       // actual play, where focus sits on document.body), Enter must keep
       // submitting exactly as before.
       const onEnter = vi.fn();
-      renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace: vi.fn() }));
+      renderHook(() => usePhysicalKeyboard({ onLetter: vi.fn(), onEnter, onBackspace: vi.fn() , onMoveCursor: vi.fn() }));
 
       dispatchKey('Enter');
 

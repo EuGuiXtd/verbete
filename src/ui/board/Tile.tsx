@@ -40,6 +40,29 @@ export interface TileProps {
   readonly letter: string;
   readonly state: TileVisualState;
   /**
+   * True for the one house in the active row that the next typed letter will
+   * land in (feedback round 1, item 3). Purely a mark: `.sorte-cursor`
+   * (index.css) draws an inset rule and changes nothing else about the tile,
+   * so a house that is both the cursor AND already holds a letter still
+   * looks exactly like the filled house it is.
+   */
+  readonly isCursor?: boolean;
+  /**
+   * Set only on the active row's tiles, and only while the match is
+   * playable. Its presence is what makes this tile a pointer target: the
+   * board has always been read-only display, and it stays a read-only
+   * display everywhere else.
+   *
+   * Deliberately NOT a `<button>` and deliberately not given a `tabindex`.
+   * Task 25 established that no tile is ever a Tab stop (there is an e2e
+   * test asserting exactly that) and five new Tab stops between the mode
+   * tabs and the keyboard would be a real cost to every keyboard player, for
+   * a job the arrow keys already do from any focus position at all — see
+   * usePhysicalKeyboard. This is the pointer affordance; the arrow keys are
+   * the keyboard one, and the live region announces both.
+   */
+  readonly onSelect?: () => void;
+  /**
    * The tile's stagger step within its row (its 0-based column index), not
    * a raw millisecond count. The actual delay is derived from
    * --reveal-duration, the same token tokens.css already collapses to 0ms
@@ -50,17 +73,24 @@ export interface TileProps {
   readonly revealDelay?: number;
 }
 
-export function Tile({ letter, state, revealDelay = 0 }: TileProps) {
+export function Tile({ letter, state, revealDelay = 0, isCursor = false, onSelect }: TileProps) {
   const accessibilityProps = isScoredState(state)
     ? { role: 'img' as const, 'aria-label': `${letter}, ${STATE_LABEL[state]}` }
     : state === 'empty'
       ? { 'aria-hidden': true as const }
       : {};
 
+  // Built by concatenation rather than interpolation into a class name:
+  // every fragment below is a complete Tailwind/component class that appears
+  // verbatim in this file, which is what the scanner needs (see
+  // STATE_CLASS's own comment).
+  const className = `${STATE_CLASS[state]}${isCursor ? ' sorte-cursor' : ''}${onSelect ? ' cursor-pointer' : ''}`;
+
   return (
     <div
-      className={STATE_CLASS[state]}
+      className={className}
       style={{ transitionDelay: `calc(var(--reveal-duration) * ${revealDelay} / ${WORD_LENGTH})` }}
+      onClick={onSelect}
       {...accessibilityProps}
     >
       {letter}

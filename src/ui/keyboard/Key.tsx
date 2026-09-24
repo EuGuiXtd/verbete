@@ -9,26 +9,45 @@ import type { KeyState } from '../../engine/keyboard';
  * in src/index.css. That is the one source of truth Task 15 already got
  * signed off; this file only ever points at it, never re-expresses it.
  *
- * `min-h-11` (the 44px touch-target floor) is constant at every width.
- * `min-w-*` is not: the full 44px square only from `sm:` (640px) up.
- * Below that — an actual phone in portrait, not a hypothetical — ten
- * QWERTY keys at 44px plus even a 4px gap already need 476px, more than
- * the viewport itself on an iPhone SE (375px) or a 390px iPhone; found by
- * hand, rendering this exact game at that width, where it overflowed the
- * whole page horizontally and left "apagar" unreachable without scrolling
- * the entire app sideways. 30px still clears WCAG's AA target-size minimum
- * (24px) with room, and the row's own height stays the full 44px, so the
- * dimension that matters most for a mis-tap between adjacent keys in the
- * same row — how much of that row's height each key claims — never
- * shrinks. Layered on top of the treatment class the same way
- * src/dev/Showcase.tsx layers `w-9` / `px-4` alongside `.tecla` — geometry,
- * not a second copy of the ink/shadow treatment.
+ * `min-h-11` (the 44px touch-target floor) is constant at every width, and
+ * it is the only floor left in this file.
+ *
+ * WIDTH IS NO LONGER A FLOOR (feedback round 1, item 5). Every earlier
+ * version of this record named a width — 44px, then 30px below `sm:` — and
+ * each one put the keyboard back on a collision course with some viewport,
+ * because ten keys of a fixed width plus nine gaps is a CONSTANT and a
+ * viewport is not. Two rounds of choosing a smaller constant (one aimed at
+ * 320px, one at 390px) came back as the same bug report from the same phone.
+ *
+ * What replaces it: `flex-1` (`flex: 1 1 0`) with `min-w-0`, so a key takes
+ * a SHARE of whatever width the row has instead of demanding an amount of
+ * it, and `max-w-[2.75rem]` — the old 44px turned from a floor into a
+ * ceiling. A ceiling cannot overflow anything; it only stops this same rule
+ * from stretching ten keys across a 1200px desktop. `px-0` because
+ * `.tecla`'s own `0.5rem` of horizontal padding is a constant of exactly the
+ * kind being removed here; the vertical half of that padding is untouched,
+ * and `min-h-11` still holds the touch target in the dimension that actually
+ * governs a mis-tap between rows.
+ *
+ * What this produces, re-measured in Chromium across thirteen viewports
+ * during review: 24.2px a side at 280px, 27.8 at 320, 31.5 at 360, 34.6 at
+ * 390, 36.3 at 412, and the 44px ceiling from about 500px up. WCAG 2.2 AA's
+ * target-size minimum is 24px, so even 280px — narrower than any phone still
+ * sold — clears it. It stops clearing it below ~278px (23.05 at 268), which
+ * is no shipping device; do not read the 280px figure as a floor with room
+ * under it. Because the horizontal padding is zero, the visible key IS the
+ * tap target, so a near-miss lands on a neighbouring letter rather than on
+ * dead space — the right failure mode when `apagar` is one tap away.
+ *
+ * Layered on top of the treatment class the same way src/dev/Showcase.tsx
+ * layers `w-9` / `px-4` alongside `.tecla` — geometry, not a second copy of
+ * the ink/shadow treatment.
  */
 const SINGLE_STATE_CLASS: Record<KeyState, string> = {
-  unused: 'tecla min-w-[30px] min-h-11 sm:min-w-11',
-  absent: 'tecla tecla-ausente min-w-[30px] min-h-11 sm:min-w-11',
-  present: 'tecla tecla-presente min-w-[30px] min-h-11 sm:min-w-11',
-  correct: 'tecla tecla-certa min-w-[30px] min-h-11 sm:min-w-11',
+  unused: 'tecla min-h-11 min-w-0 max-w-[2.75rem] flex-1 px-0',
+  absent: 'tecla tecla-ausente min-h-11 min-w-0 max-w-[2.75rem] flex-1 px-0',
+  present: 'tecla tecla-presente min-h-11 min-w-0 max-w-[2.75rem] flex-1 px-0',
+  correct: 'tecla tecla-certa min-h-11 min-w-0 max-w-[2.75rem] flex-1 px-0',
 };
 
 /**
@@ -137,7 +156,18 @@ export function Key({ letter, states, onPress }: KeyProps) {
   return (
     <button
       type="button"
-      className={segmented ? 'tecla tecla-multipla min-w-11 min-h-11' : SINGLE_STATE_CLASS[states[0] ?? 'unused']}
+      // A segmented key gets the identical geometry its single-board sibling
+      // does (see SINGLE_STATE_CLASS's doc comment). It used to be the one
+      // key in the app with no narrow variant at all — a hard `min-w-11` at
+      // every width — which is exactly why Dueto and Quarteto overflowed a
+      // 320px row far harder than Solo ever did. There is no separate
+      // narrow case to write any more: a share of the row is a share of the
+      // row whether the key has one band or four.
+      className={
+        segmented
+          ? 'tecla tecla-multipla min-h-11 min-w-0 max-w-[2.75rem] flex-1 px-0'
+          : SINGLE_STATE_CLASS[states[0] ?? 'unused']
+      }
       aria-label={ariaLabelFor(letter, states)}
       onClick={() => {
         onPress(letter);

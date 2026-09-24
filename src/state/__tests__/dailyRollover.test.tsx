@@ -166,7 +166,7 @@ describe('daily mode day rollover (via MatchProvider + the real useDailyRollover
     act(() => {
       result.current.selectMode('solo', 'diario');
     });
-    expect(result.current.state.draft).toBe(''); // a different match entirely
+    expect(result.current.state.draft).toBe('     '); // a different match entirely
 
     act(() => {
       result.current.selectMode('solo', 'infinito');

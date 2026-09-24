@@ -4,6 +4,15 @@ export interface PhysicalKeyboardHandlers {
   readonly onLetter: (letter: string) => void;
   readonly onEnter: () => void;
   readonly onBackspace: () => void;
+  /**
+   * -1 or +1. Feedback round 1, item 3: tapping a house is the pointer way
+   * to move the insertion point, and this is the keyboard way. It has to
+   * exist — the feature would otherwise be reachable only by pointer, which
+   * for a game whose entire input path is the keyboard would be an odd place
+   * to stop — and arrow keys are what a row of five text cells has always
+   * meant.
+   */
+  readonly onMoveCursor: (delta: number) => void;
 }
 
 const LETTER_KEY = /^[a-zA-Z]$/;
@@ -68,7 +77,12 @@ function isButtonOwnedActivationKey(event: KeyboardEvent): boolean {
  * `keydown` on `document` has none of that, which is exactly why the
  * virtual keyboard, not this hook, is the touch input path.
  */
-export function usePhysicalKeyboard({ onLetter, onEnter, onBackspace }: PhysicalKeyboardHandlers): void {
+export function usePhysicalKeyboard({
+  onLetter,
+  onEnter,
+  onBackspace,
+  onMoveCursor,
+}: PhysicalKeyboardHandlers): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (hasBlockingModifier(event)) return;
@@ -85,6 +99,21 @@ export function usePhysicalKeyboard({ onLetter, onEnter, onBackspace }: Physical
       }
       if (event.key === 'Backspace') {
         onBackspace();
+        return;
+      }
+      // `preventDefault`, unlike every other branch above: Left/Right are
+      // the browser's own scroll keys, and Shell's board area is a genuine
+      // scroll container (`overflow-y-auto`, which makes a horizontal scroll
+      // possible too). Without this, moving the insertion point could drag
+      // the whole board sideways at the same time.
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        onMoveCursor(-1);
+        return;
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        onMoveCursor(1);
       }
     };
 
@@ -92,5 +121,5 @@ export function usePhysicalKeyboard({ onLetter, onEnter, onBackspace }: Physical
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onLetter, onEnter, onBackspace]);
+  }, [onLetter, onEnter, onBackspace, onMoveCursor]);
 }

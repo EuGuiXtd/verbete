@@ -181,17 +181,17 @@ describe('MatchProvider persistence', () => {
       result.current.type('C');
       result.current.type('A');
     });
-    expect(loadProgress('solo', 'infinito')?.draft).toBe(''); // only the mount-time immediate save has landed
+    expect(loadProgress('solo', 'infinito')?.draft).toBe('     '); // only the mount-time immediate save has landed
 
     act(() => {
       vi.advanceTimersByTime(499);
     });
-    expect(loadProgress('solo', 'infinito')?.draft).toBe('');
+    expect(loadProgress('solo', 'infinito')?.draft).toBe('     ');
 
     act(() => {
       vi.advanceTimersByTime(2);
     });
-    expect(loadProgress('solo', 'infinito')?.draft).toBe('CA');
+    expect(loadProgress('solo', 'infinito')?.draft).toBe('CA   ');
   });
 
   it('flushes an un-debounced draft immediately when the tab is hidden', () => {
@@ -201,14 +201,14 @@ describe('MatchProvider persistence', () => {
       result.current.type('C');
       result.current.type('A');
     });
-    expect(loadProgress('solo', 'infinito')?.draft).toBe('');
+    expect(loadProgress('solo', 'infinito')?.draft).toBe('     ');
 
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     act(() => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(loadProgress('solo', 'infinito')?.draft).toBe('CA');
+    expect(loadProgress('solo', 'infinito')?.draft).toBe('CA   ');
   });
 
   it('flushes the outgoing match immediately on selectMode, capturing an un-debounced draft', () => {
@@ -218,13 +218,13 @@ describe('MatchProvider persistence', () => {
       result.current.type('C');
       result.current.type('A');
     });
-    expect(loadProgress('solo', 'infinito')?.draft).toBe('');
+    expect(loadProgress('solo', 'infinito')?.draft).toBe('     ');
 
     act(() => {
       result.current.selectMode('dueto', 'infinito');
     });
 
-    expect(loadProgress('solo', 'infinito')?.draft).toBe('CA');
+    expect(loadProgress('solo', 'infinito')?.draft).toBe('CA   ');
   });
 
   it('discards a stale daily record whose answersHash no longer matches the word list', () => {
@@ -247,7 +247,7 @@ describe('MatchProvider persistence', () => {
 
     expect(result.current.state.dayKey).toBe(today);
     expect(result.current.state.guesses).toEqual([]); // discarded, not scored against words the player never saw
-    expect(result.current.state.draft).toBe('');
+    expect(result.current.state.draft).toBe('     ');
   });
 
   it('restores an in-progress daily record whose answersHash still matches', () => {
@@ -275,6 +275,70 @@ describe('MatchProvider persistence', () => {
       second.result.current.selectMode('solo', 'diario');
     });
     expect(second.result.current.state.draft).toBe('W0000');
+  });
+
+  /**
+   * Feedback round 1, item 3 changed what a draft IS — from a string that
+   * grows from the left to a fixed board of five houses with a sentinel for
+   * the empty ones — and did it without bumping the storage schema version,
+   * on the argument that padding an old left-packed draft on the right
+   * reproduces it exactly. That argument is only worth anything if it is
+   * tested: a player mid-guess when the new build shipped must find their
+   * letters where they left them, in the same houses, with the insertion
+   * point where continuing to type would have put it.
+   */
+  it('restores a draft written by the OLD left-packed format, in the same houses', () => {
+    vi.useFakeTimers();
+    const today = dayKeyOf(Date.now());
+    const first = renderHook(() => useMatch(), { wrapper });
+    act(() => {
+      first.result.current.selectMode('solo', 'diario');
+    });
+    typeWord(first.result, 'W0');
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    const stored = loadProgress('solo', 'diario');
+    expect(stored?.dayKey).toBe(today);
+    first.unmount();
+
+    // Rewrite that record exactly as a pre-item-3 build would have left it:
+    // two letters, no padding, nothing else touched.
+    saveProgress({ ...stored!, draft: 'W0' });
+
+    const second = renderHook(() => useMatch(), { wrapper });
+    act(() => {
+      second.result.current.selectMode('solo', 'diario');
+    });
+    expect(second.result.current.state.draft).toBe('W0   ');
+    // And the insertion point lands where the next letter would have gone.
+    expect(second.result.current.state.cursor).toBe(2);
+  });
+
+  it('survives a draft that is corrupt rather than merely old', () => {
+    vi.useFakeTimers();
+    const first = renderHook(() => useMatch(), { wrapper });
+    act(() => {
+      first.result.current.selectMode('solo', 'diario');
+    });
+    typeWord(first.result, 'W0');
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    const stored = loadProgress('solo', 'diario');
+    first.unmount();
+
+    // `loadProgress` casts rather than validates (see MatchProvider's own
+    // `hasReplayableAnswers` for the same reasoning about `answers`), so a
+    // hand-edited record can carry anything at all here.
+    saveProgress({ ...stored!, draft: 12345 as unknown as string });
+
+    const second = renderHook(() => useMatch(), { wrapper });
+    act(() => {
+      second.result.current.selectMode('solo', 'diario');
+    });
+    expect(second.result.current.state.draft).toBe('     ');
+    expect(second.result.current.state.cursor).toBe(0);
   });
 
   it('restores a finished match, preserving the original finishedAt rather than the reload time', () => {
@@ -349,7 +413,7 @@ describe('MatchProvider persistence', () => {
       variant: 'solo' as const,
       mode: 'infinito' as const,
       dayKey: null,
-      draft: '',
+      draft: '     ',
       answers: ['casal'],
       answersHash: 'irrelevant-for-infinite-restore',
       startedAt: 1,
@@ -373,7 +437,7 @@ describe('MatchProvider persistence', () => {
       // replayMatch's `for...of` before any of these expectations ran.
       expect(result.current.state.status).toBe('playing');
       expect(result.current.state.guesses).toEqual([]);
-      expect(result.current.state.draft).toBe('');
+      expect(result.current.state.draft).toBe('     ');
     });
   });
 
@@ -383,7 +447,7 @@ describe('MatchProvider persistence', () => {
       mode: 'infinito' as const,
       dayKey: null,
       guesses: [],
-      draft: '',
+      draft: '     ',
       answersHash: 'irrelevant-for-infinite-restore',
       startedAt: 1,
       finishedAt: null,

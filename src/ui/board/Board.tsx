@@ -1,4 +1,4 @@
-import { WORD_LENGTH } from '../../engine/constants';
+import { EMPTY_SLOT, WORD_LENGTH } from '../../engine/constants';
 import { boardRows } from '../../engine/match';
 import type { MatchState } from '../../engine/match';
 import { Row } from './Row';
@@ -17,16 +17,31 @@ export interface BoardProps {
   readonly shakeToken?: number;
   /** Threaded straight through to every Row — see Row's own doc comment. */
   readonly compact?: boolean;
+  /**
+   * Feedback round 1, item 3. Reaches only this board's ACTIVE row — a
+   * scored row is history and an unplayed row is not where the next letter
+   * goes, so neither can be the insertion point or a pointer target. A
+   * solved board has no active row at all (`activeIndex` is -1 below) and so
+   * gets neither, for free.
+   */
+  readonly onSelectCell?: (index: number) => void;
 }
 
 function emptyCells(): RowCell[] {
   return Array.from({ length: WORD_LENGTH }, () => ({ letter: '', state: 'empty' as const }));
 }
 
+/**
+ * Feedback round 1, item 3: a draft is now `WORD_LENGTH` houses, any of
+ * which may be empty, rather than a string that grew from the left — so
+ * "empty" is `EMPTY_SLOT` in the middle of a word, not merely "past the end
+ * of a short string". Both cases still land on the same `empty` tile, which
+ * is why nothing downstream of here had to learn about holes.
+ */
 function draftCells(draft: string): RowCell[] {
   return Array.from({ length: WORD_LENGTH }, (_unused, index) => {
     const letter = draft[index];
-    return letter === undefined
+    return letter === undefined || letter === EMPTY_SLOT
       ? { letter: '', state: 'empty' as const }
       : { letter, state: 'filled' as const };
   });
@@ -42,7 +57,7 @@ function draftCells(draft: string): RowCell[] {
  * draft row, no empty padding up to `maxAttempts`. That is the whole
  * freeze; there is no separate branch for it.
  */
-export function Board({ state, boardIndex, shakeToken = 0, compact = false }: BoardProps) {
+export function Board({ state, boardIndex, shakeToken = 0, compact = false, onSelectCell }: BoardProps) {
   const board = state.boards[boardIndex];
   if (!board) return null;
 
@@ -65,13 +80,16 @@ export function Board({ state, boardIndex, shakeToken = 0, compact = false }: Bo
     }
   }
 
+  // The row-to-row gap tracks Row.tsx's own tile-to-tile gap exactly — see
+  // its comment (feedback round 1, item 2) for why the non-compact pair is
+  // responsive now rather than a flat `gap-2`.
   const wrapperClass = solved
     ? compact
       ? 'flex w-full flex-col gap-1 opacity-60 pointer-events-none'
-      : 'flex w-full flex-col gap-2 opacity-60 pointer-events-none'
+      : 'flex w-full flex-col gap-1 opacity-60 pointer-events-none sm:gap-2'
     : compact
       ? 'flex w-full flex-col gap-1'
-      : 'flex w-full flex-col gap-2';
+      : 'flex w-full flex-col gap-1 sm:gap-2';
 
   // Task 25 fix round 1 (F4): `aria-disabled` on a plain, role-less `<div>`
   // is not exposed as state by any accessibility tree — it only does
@@ -121,6 +139,8 @@ export function Board({ state, boardIndex, shakeToken = 0, compact = false }: Bo
             cells={cells}
             shake={shaking}
             compact={compact}
+            cursorIndex={isActive ? state.cursor : null}
+            onSelectCell={isActive ? onSelectCell : undefined}
           />
         );
       })}
